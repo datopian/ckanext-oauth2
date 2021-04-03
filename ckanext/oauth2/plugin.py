@@ -44,8 +44,6 @@ def user_create(context, data_dict):
     return _no_permissions(context, msg)
 
 
-
-
 def _get_previous_page(default_page):
     if 'came_from' not in toolkit.request.params:
         came_from_url = toolkit.request.headers.get('Referer', default_page)
@@ -151,9 +149,7 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     def get_auth_functions(self):
         # we need to prevent some actions being authorized.
         return {
-            'user_update': user_update,
-            'user_reset': user_reset,
-            'request_reset': request_reset
+            'user_create': user_create
         }
 
     def update_config(self, config):
