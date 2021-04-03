@@ -26,7 +26,7 @@ import ckan.model as model
 import db
 import json
 import logging
-from six.moves.urllib.parse import urljoin
+from six.moves.urllib.parse import urljoin, urlparse, urlunparse
 import os
 
 from base64 import b64encode, b64decode
@@ -178,6 +178,7 @@ class OAuth2Helper(object):
         # Some providers, like Google and FIWARE only allows one account per email
         user = None
         users = model.User.by_email(email)
+
         if len(users) == 1:
             user = users[0]
 
@@ -222,7 +223,10 @@ class OAuth2Helper(object):
         state = toolkit.request.params.get('state')
         came_from = get_came_from(state)
         toolkit.response.status = 302
-        toolkit.response.location = came_from
+        if urlparse(came_from).path == '/user/login':
+            toolkit.response.location = urlunparse(urlparse(came_from)._replace(path=constants.INITIAL_PAGE))
+        else: 
+            toolkit.response.location = came_from
 
     def get_stored_token(self, user_name):
         user_token = db.UserToken.by_user_name(user_name=user_name)

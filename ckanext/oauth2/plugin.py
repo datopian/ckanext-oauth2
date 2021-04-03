@@ -44,22 +44,6 @@ def user_create(context, data_dict):
     return _no_permissions(context, msg)
 
 
-@toolkit.auth_sysadmins_check
-def user_update(context, data_dict):
-    msg = toolkit._('Users cannot be edited.')
-    return _no_permissions(context, msg)
-
-
-@toolkit.auth_sysadmins_check
-def user_reset(context, data_dict):
-    msg = toolkit._('Users cannot reset passwords.')
-    return _no_permissions(context, msg)
-
-
-@toolkit.auth_sysadmins_check
-def request_reset(context, data_dict):
-    msg = toolkit._('Users cannot reset passwords.')
-    return _no_permissions(context, msg)
 
 
 def _get_previous_page(default_page):
@@ -99,7 +83,7 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     def before_map(self, m):
         log.debug('Setting up the redirections to the OAuth2 service')
 
-        m.connect('/user/login',
+        m.connect('admin.sso', '/login/sso',
                   controller='ckanext.oauth2.controller:OAuth2Controller',
                   action='login')
 
@@ -167,7 +151,6 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     def get_auth_functions(self):
         # we need to prevent some actions being authorized.
         return {
-            'user_create': user_create,
             'user_update': user_update,
             'user_reset': user_reset,
             'request_reset': request_reset
