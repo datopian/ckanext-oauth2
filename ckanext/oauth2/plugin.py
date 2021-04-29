@@ -33,17 +33,6 @@ from urlparse import urlparse
 log = logging.getLogger(__name__)
 
 
-def _no_permissions(context, msg):
-    user = context['user']
-    return {'success': False, 'msg': msg.format(user=user)}
-
-
-@toolkit.auth_sysadmins_check
-def user_create(context, data_dict):
-    msg = toolkit._('Users cannot be created.')
-    return _no_permissions(context, msg)
-
-
 def _get_previous_page(default_page):
     if 'came_from' not in toolkit.request.params:
         came_from_url = toolkit.request.headers.get('Referer', default_page)
@@ -68,7 +57,6 @@ def _get_previous_page(default_page):
 class OAuth2Plugin(plugins.SingletonPlugin):
 
     plugins.implements(plugins.IAuthenticator, inherit=True)
-    plugins.implements(plugins.IAuthFunctions, inherit=True)
     plugins.implements(plugins.IRoutes, inherit=True)
     plugins.implements(plugins.IConfigurer)
 
@@ -90,10 +78,6 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         m.connect('/oauth2/callback',
                   controller='ckanext.oauth2.controller:OAuth2Controller',
                   action='callback')
-
-        # Redirect the user to the OAuth service register page
-        if self.register_url:
-            m.redirect('/user/register', self.register_url)
 
         # Redirect the user to the OAuth service reset page
         if self.reset_url:
@@ -145,12 +129,6 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         else:
             g.user = None
             log.warn('The user is not currently logged...')
-
-    def get_auth_functions(self):
-        # we need to prevent some actions being authorized.
-        return {
-            'user_create': user_create
-        }
 
     def update_config(self, config):
         # Update our configuration
