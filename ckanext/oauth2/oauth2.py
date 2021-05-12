@@ -173,7 +173,7 @@ class OAuth2Helper(object):
 
     def user_json(self, user_data):
         email = user_data[self.profile_api_mail_field]
-        user_name = re.sub(r"\((.*?.)\), +", "", user_data[self.profile_api_user_field]).lower().replace(" ", "_")
+        user_name = user_data[self.profile_api_mail_field].rpartition('@')[0]
 
 
         # In CKAN can exists more than one user associated with the same email
