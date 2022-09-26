@@ -38,11 +38,10 @@ log = logging.getLogger(__name__)
 class OAuth2Controller(base.BaseController):
 
     def __init__(self):
-        self.oauth2helper = oauth2.OAuth2Helper()
+        self.oauth2helper = None
 
-    def login(self):
-        log.debug('login')
-
+    def login(self, provider):
+        self.oauth2helper = oauth2.OAuth2Helper(provider)
         # Log in attemps are fired when the user is not logged in and they click
         # on the log in button
 
@@ -53,7 +52,8 @@ class OAuth2Controller(base.BaseController):
 
         self.oauth2helper.challenge(came_from_url)
 
-    def callback(self):
+    def callback(self, provider):
+        self.oauth2helper = oauth2.OAuth2Helper(provider)
         try:
             token = self.oauth2helper.get_token()
             user_name = self.oauth2helper.identify(token)

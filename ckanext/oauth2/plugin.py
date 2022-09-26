@@ -23,9 +23,13 @@ from __future__ import unicode_literals
 import logging
 import oauth2
 import os
+import yaml
+import db
+
 
 from functools import partial
 from ckan import plugins
+import ckan.model as model
 from ckan.common import g
 from ckan.plugins import toolkit
 from urlparse import urlparse
@@ -53,29 +57,51 @@ def _get_previous_page(default_page):
 
     return came_from_url
 
+def _get_sso_options():
+    yaml_file = toolkit.config.get('ckan.oauth2.config_path', 
+            os.path.join(os.path.dirname(__file__),  '..', 'oauth_config.yaml'))
+    with open(yaml_file) as f:
+        oauth_cofig = yaml.load(f, Loader=yaml.FullLoader)  
+        provider_list = []
+        for provider in oauth_cofig['providers']:
+            provider_list.append(provider['name'])
+    return provider_list
 
+
+def _user_is_sso_user():
+    user_name = toolkit.c.userobj.name
+    user = db.UserToken.by_user_name(user_name=user_name)
+    if user:
+        return True
+    return False
 class OAuth2Plugin(plugins.SingletonPlugin):
-
+    plugins.implements(plugins.ITemplateHelpers)
     plugins.implements(plugins.IAuthenticator, inherit=True)
     plugins.implements(plugins.IRoutes, inherit=True)
     plugins.implements(plugins.IConfigurer)
 
     def __init__(self, name=None):
-        '''Store the OAuth 2 client configuration'''
-        log.debug('Init OAuth2 extension')
+        log.debug('Initializing the OAuth2 plugin')
+        db.init_db(model)
 
-        self.oauth2helper = oauth2.OAuth2Helper()
+
+    # ITemplateHelpers
+    def get_helpers(self):
+        return {
+            'sso_login_options': _get_sso_options,
+            'user_is_sso_user': _user_is_sso_user,
+        }
 
     def before_map(self, m):
         log.debug('Setting up the redirections to the OAuth2 service')
 
-        m.connect('admin.sso', '/login/sso',
+        m.connect('admin.sso', '/login/{provider}/sso',
                   controller='ckanext.oauth2.controller:OAuth2Controller',
                   action='login')
 
         # We need to handle petitions received to the Callback URL
         # since some error can arise and we need to process them
-        m.connect('/oauth2/callback',
+        m.connect('/oauth2/{provider}/callback',
                   controller='ckanext.oauth2.controller:OAuth2Controller',
                   action='callback')
 
@@ -90,10 +116,11 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         return m
 
     def identify(self):
-        log.debug('identify')
-
+        log.debug('Identifying the user')
         def _refresh_and_save_token(user_name):
-            new_token = self.oauth2helper.refresh_token(user_name)
+            user = db.UserToken.by_user_name(user_name=user_name)
+            oauth2helper =  oauth2.OAuth2Helper(user.provider)
+            new_token = oauth2helper.refresh_token(user_name)
             if new_token:
                 toolkit.c.usertoken = new_token
 
@@ -111,7 +138,12 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         if apikey:
             try:
                 token = {'access_token': apikey}
-                user_name = self.oauth2helper.identify(token)
+                user = db.UserToken.by_user_token(token=token)
+                try:
+                    oauth2helper = oauth2.OAuth2Helper(user.provider)
+                except AttributeError:
+                    oauth2helper = oauth2.OAuth2Helper()
+                user_name = oauth2helper.identify(token)
             except Exception:
                 pass
 
@@ -123,12 +155,17 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         # If we have been able to log in the user (via API or Session)
         if user_name:
             g.user = user_name
+            user = db.UserToken.by_user_name(user_name=user_name)
+            try:
+                oauth2helper = oauth2.OAuth2Helper(user.provider)
+            except AttributeError:
+                oauth2helper = oauth2.OAuth2Helper()
             toolkit.c.user = user_name
-            toolkit.c.usertoken = self.oauth2helper.get_stored_token(user_name)
+            toolkit.c.usertoken = oauth2helper.get_stored_token(user_name)
             toolkit.c.usertoken_refresh = partial(_refresh_and_save_token, user_name)
         else:
             g.user = None
-            log.warn('The user is not currently logged...')
+            log.warn('The user is currently not logged in.')
 
     def update_config(self, config):
         # Update our configuration

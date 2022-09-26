@@ -20,8 +20,9 @@
 
 
 from __future__ import unicode_literals
-
+import yaml
 import base64
+import random
 import ckan.model as model
 import db
 import re
@@ -57,33 +58,34 @@ REQUIRED_CONF = ("authorization_endpoint", "token_endpoint", "client_id", "clien
 
 
 class OAuth2Helper(object):
-
-    def __init__(self):
-
+    def __init__(self, provider = 'github'):
+        self.provider = provider
+        
+        yaml_file = toolkit.config.get('ckan.oauth2.config_path', os.path.join(os.path.dirname(__file__),  '..', 'oauth_config.yaml'))
+        with open(yaml_file) as f:
+            oauth_cofig = yaml.load(f, Loader=yaml.FullLoader)  
+            oauth_cofig = list(filter(lambda x: x['name'] == self.provider, oauth_cofig['providers']))[0]
+            self.client_id = oauth_cofig['client_id']
+            self.client_secret = oauth_cofig['client_secret']
+            self.authorization_endpoint = oauth_cofig['authorization_endpoint']
+            self.token_endpoint = oauth_cofig['token_endpoint']
+            self.profile_api_url = oauth_cofig['profile_api_url']
+            self.profile_api_user_field = oauth_cofig['profile_api_user_field']
+            self.profile_api_mail_field = oauth_cofig['profile_api_mail_field']
+            self.scope = "%s" % oauth_cofig['scope']
+            self.profile_api_fullname_field = oauth_cofig.get('profile_api_fullname_field', None)
+            self.profile_api_groupmembership_field = oauth_cofig.get('profile_api_groupmembership_field', None)
+            self.sysadmin_group_name = oauth_cofig.get('sysadmin_group_name', None)
+            
         self.verify_https = os.environ.get('OAUTHLIB_INSECURE_TRANSPORT', '') == ""
         if self.verify_https and os.environ.get("REQUESTS_CA_BUNDLE", "").strip() != "":
             self.verify_https = os.environ["REQUESTS_CA_BUNDLE"].strip()
 
         self.jwt_enable = six.text_type(os.environ.get('CKAN_OAUTH2_JWT_ENABLE', toolkit.config.get('ckan.oauth2.jwt.enable',''))).strip().lower() in ("true", "1", "on")
-
         self.legacy_idm = six.text_type(os.environ.get('CKAN_OAUTH2_LEGACY_IDM', toolkit.config.get('ckan.oauth2.legacy_idm', ''))).strip().lower() in ("true", "1", "on")
-        self.authorization_endpoint = six.text_type(os.environ.get('CKAN_OAUTH2_AUTHORIZATION_ENDPOINT', toolkit.config.get('ckan.oauth2.authorization_endpoint', ''))).strip()
-        self.token_endpoint = six.text_type(os.environ.get('CKAN_OAUTH2_TOKEN_ENDPOINT', toolkit.config.get('ckan.oauth2.token_endpoint', ''))).strip()
-        self.profile_api_url = six.text_type(os.environ.get('CKAN_OAUTH2_PROFILE_API_URL', toolkit.config.get('ckan.oauth2.profile_api_url', ''))).strip()
-        self.client_id = six.text_type(os.environ.get('CKAN_OAUTH2_CLIENT_ID', toolkit.config.get('ckan.oauth2.client_id', ''))).strip()
-        self.client_secret = six.text_type(os.environ.get('CKAN_OAUTH2_CLIENT_SECRET', toolkit.config.get('ckan.oauth2.client_secret', ''))).strip()
-        self.scope = six.text_type(os.environ.get('CKAN_OAUTH2_SCOPE', toolkit.config.get('ckan.oauth2.scope', ''))).strip()
         self.rememberer_name = six.text_type(os.environ.get('CKAN_OAUTH2_REMEMBER_NAME', toolkit.config.get('ckan.oauth2.rememberer_name', 'auth_tkt'))).strip()
-        self.profile_api_user_field = six.text_type(os.environ.get('CKAN_OAUTH2_PROFILE_API_USER_FIELD', toolkit.config.get('ckan.oauth2.profile_api_user_field', ''))).strip()
-        self.profile_api_fullname_field = six.text_type(os.environ.get('CKAN_OAUTH2_PROFILE_API_FULLNAME_FIELD', toolkit.config.get('ckan.oauth2.profile_api_fullname_field', ''))).strip()
-        self.profile_api_mail_field = six.text_type(os.environ.get('CKAN_OAUTH2_PROFILE_API_MAIL_FIELD', toolkit.config.get('ckan.oauth2.profile_api_mail_field', ''))).strip()
-        self.profile_api_groupmembership_field = six.text_type(os.environ.get('CKAN_OAUTH2_PROFILE_API_GROUPMEMBERSHIP_FIELD', toolkit.config.get('ckan.oauth2.profile_api_groupmembership_field', ''))).strip()
-        self.sysadmin_group_name = six.text_type(os.environ.get('CKAN_OAUTH2_SYSADMIN_GROUP_NAME', toolkit.config.get('ckan.oauth2.sysadmin_group_name', ''))).strip()
-
-        self.redirect_uri = urljoin(urljoin(toolkit.config.get('ckan.site_url', 'http://localhost:5000'), toolkit.config.get('ckan.root_path')), constants.REDIRECT_URL)
-
-        # Init db
-        db.init_db(model)
+        self.redirect_uri = urljoin(urljoin(toolkit.config.get('ckan.site_url', 'http://localhost:5000'), toolkit.config.get('ckan.root_path')), '/oauth2/%s/callback' % self.provider)
+        
 
         missing = [key for key in REQUIRED_CONF if getattr(self, key, "") == ""]
         if missing:
@@ -95,7 +97,7 @@ class OAuth2Helper(object):
         # This function is called by the log in function when the user is not logged in
         state = generate_state(came_from_url)
         oauth = OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope, state=state)
-        auth_url, _ = oauth.authorization_url(self.authorization_endpoint)
+        auth_url, _ = oauth.authorization_url(self.authorization_endpoint, prompt="consent")
         log.debug('Challenge: Redirecting challenge to page {0}'.format(auth_url))
         # CKAN 2.6 only supports bytes
         return toolkit.redirect_to(auth_url.encode('utf-8'))
@@ -127,13 +129,13 @@ class OAuth2Helper(object):
                 raise InsecureTransportError()
             else:
                 raise
-
+        except Exception as e:
+            raise e
         return token
 
     def identify(self, token):
 
         if self.jwt_enable:
-
             access_token = bytes(token['access_token'])
             user_data = jwt.decode(access_token, verify=False)
             user = self.user_json(user_data)
@@ -141,10 +143,10 @@ class OAuth2Helper(object):
 
             try:
                 if self.legacy_idm:
-                    profile_response = requests.get(self.profile_api_url + '?access_token=%s' % token['access_token'], verify=self.verify_https)
+                    profile_response = requests.get(self.profile_api_url + '?access_token=%s' % token['access_token'], verify=True)
                 else:
                     oauth = OAuth2Session(self.client_id, token=token)
-                    profile_response = oauth.get(self.profile_api_url, verify=self.verify_https)
+                    profile_response = oauth.get(self.profile_api_url, verify=True)
 
             except requests.exceptions.SSLError as e:
                 # TODO search a better way to detect invalid certificates
@@ -152,6 +154,8 @@ class OAuth2Helper(object):
                     raise InsecureTransportError()
                 else:
                     raise
+            except Exception as e:
+                raise e
 
             # Token can be invalid
             if not profile_response.ok:
@@ -163,7 +167,8 @@ class OAuth2Helper(object):
             else:
                 user_data = profile_response.json()
                 user = self.user_json(user_data)
-
+                
+    
         # Save the user in the database
         model.Session.add(user)
         model.Session.commit()
@@ -172,26 +177,32 @@ class OAuth2Helper(object):
         return user.name
 
     def user_json(self, user_data):
-        email = user_data[self.profile_api_mail_field]
-        user_name = user_data[self.profile_api_mail_field].rpartition('@')[0]
+        # Github provides email in list format
+        if self.profile_api_url.startswith('https://api.github.com'):
+            email = [e['email'] for e in user_data if e['primary']  == True ][0]
+        else:
+            email = user_data[self.profile_api_mail_field]
 
+        user_name = email.rpartition('@')[0]
 
         # In CKAN can exists more than one user associated with the same email
         # Some providers, like Google and FIWARE only allows one account per email
         user = None
         users = model.User.by_email(email)
 
-        if len(users) == 1:
+        if len(users) >= 1:
             user = users[0]
 
         # If the user does not exist, we have to create it...
-        if user is None:
+        if not user:
             user = model.User(email=email)
+            # if user name is already exists, add a random string to the end
+            is_username_availabe = model.User.check_name_available(user_name)
+            user.name = user_name if is_username_availabe else user_name + '%s' % random.randint(10, 20)
 
         # Now we update his/her user_name with the one provided by the OAuth2 service
         # In the future, users will be obtained based on this field
-        user.name = user_name
-
+    
         # Update fullname
         if self.profile_api_fullname_field != "" and self.profile_api_fullname_field in user_data:
             user.fullname = user_data[self.profile_api_fullname_field]
@@ -251,12 +262,17 @@ class OAuth2Helper(object):
         user_token.access_token = token['access_token']
         user_token.token_type = token['token_type']
         user_token.refresh_token = token.get('refresh_token')
+        user_token.expires_in = token.get('expires_in')
+        user_token.provider = self.provider
+
         if 'expires_in' in token:
             user_token.expires_in = token['expires_in']
         else:
-            access_token = jwt.decode(user_token.access_token, verify=False)
-            user_token.expires_in = access_token['exp'] - access_token['iat']
-
+            try:
+                access_token = jwt.decode(user_token.access_token, verify=False)
+                user_token.expires_in = access_token['exp'] - access_token['iat']
+            except jwt.exceptions.DecodeError as e:
+                user_token.expires_in = 3599
         model.Session.add(user_token)
         model.Session.commit()
 
@@ -272,6 +288,9 @@ class OAuth2Helper(object):
                     raise InsecureTransportError()
                 else:
                     raise
+            except:
+                log.error("Error refreshing token for user %s" % user_name)
+                raise
             self.update_token(user_name, token)
             log.info('Token for user %s has been updated properly' % user_name)
             return token

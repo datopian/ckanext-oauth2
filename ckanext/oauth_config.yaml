@@ -1,0 +1,32 @@
+providers:
+  - name: github
+    authorization_endpoint: https://github.com/login/oauth/authorize
+    token_endpoint:  https://github.com/login/oauth/access_token
+    profile_api_url: https://api.github.com/user/emails
+    client_id: your github client id
+    client_secret: your github client secret
+    scope: read:user,user:email
+    profile_api_user_field: login
+    profile_api_fullname_field : name
+    profile_api_mail_field : email
+  - name: microsoft
+    authorization_endpoint: https://login.microsoftonline.com/xxxxxxxx-xxxxxxx-xxxxxxx/oauth2/v2.0/authorize
+    token_endpoint:  https://login.microsoftonline.com/xxxxxxxx-xxxxxxx-xxxxxxx/oauth2/v2.0/token
+    profile_api_url: https://graph.microsoft.com/v1.0/me
+    client_id: your microsoft client id
+    client_secret: your microsoft client secret
+    scope: profile openid User.Read email
+    profile_api_user_field: displayName
+    profile_api_fullname_field : displayName
+    profile_api_mail_field : userPrincipalName
+  - name: google
+    authorization_endpoint: https://accounts.google.com/o/oauth2/v2/auth
+    token_endpoint:  https://www.googleapis.com/oauth2/v4/token
+    profile_api_url: https://www.googleapis.com/oauth2/v3/userinfo
+    client_id: your google client id
+    client_secret: your google secret
+    scope: openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile
+    profile_api_user_field: sub
+    profile_api_fullname_field : name
+    profile_api_mail_field : email
+

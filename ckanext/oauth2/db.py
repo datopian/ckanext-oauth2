@@ -40,7 +40,8 @@ def init_db(model):
             sa.Column('access_token', sa.types.UnicodeText),
             sa.Column('token_type', sa.types.UnicodeText),
             sa.Column('refresh_token', sa.types.UnicodeText),
-            sa.Column('expires_in', sa.types.UnicodeText)
+            sa.Column('expires_in', sa.types.UnicodeText),
+            sa.Column('provider', sa.types.UnicodeText)
         )
 
         # Create the table only if it does not exist
