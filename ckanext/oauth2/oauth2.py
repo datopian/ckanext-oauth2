@@ -21,14 +21,16 @@
 from __future__ import unicode_literals
 
 import ckan.model as model
-import constants
-import db
+from ckanext.oauth2 import constants 
+from ckanext.oauth2 import db
 import json
 import logging
 
 from base64 import b64encode, b64decode
 from ckan.plugins import toolkit
-from pylons import config
+from ckan.common import config
+
+
 from requests_oauthlib import OAuth2Session
 
 log = logging.getLogger(__name__)
@@ -51,7 +53,7 @@ class OAuth2Helper(object):
         self.profile_api_url = config.get('ckanext.oauth2.profile_api_url', None)
         self.client_id = config.get('ckanext.oauth2.client_id', None)
         self.client_secret = config.get('ckanext.oauth2.client_secret', None)
-        self.scope = config.get('ckanext.oauth2.scope', '').decode()
+        self.scope = config.get('ckanext.oauth2.scope', '')
         self.rememberer_name = config.get('ckanext.oauth2.rememberer_name', None)
         self.profile_api_user_field = config.get('ckanext.oauth2.profile_api_user_field', None)
         self.profile_api_fullname_field = config.get('ckanext.oauth2.profile_api_fullname_field', None)

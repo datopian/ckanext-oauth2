@@ -19,16 +19,19 @@
 
 from __future__ import unicode_literals
 
-import constants
+from ckanext.oauth2 import constants 
 import logging
-import oauth2
+from ckanext.oauth2 import oauth2
+from ckanext.oauth2 import controller
 
 from functools import partial
 from ckan import plugins
 from ckan.common import session
 from ckan.plugins import toolkit
-from pylons import config
-from urlparse import urlparse
+
+from ckan.common import config
+
+from urllib.parse import urlparse
 
 log = logging.getLogger(__name__)
 
@@ -63,40 +66,40 @@ def request_reset(context, data_dict):
 
 
 class OAuth2Plugin(plugins.SingletonPlugin):
-
-    plugins.implements(plugins.IAuthenticator, inherit=True)
-    plugins.implements(plugins.IAuthFunctions, inherit=True)
-    plugins.implements(plugins.IRoutes, inherit=True)
     plugins.implements(plugins.IConfigurer)
     plugins.implements(plugins.IConfigurable)
+    plugins.implements(plugins.IAuthenticator, inherit=True)
+    plugins.implements(plugins.IAuthFunctions, inherit=True)
+    plugins.implements(plugins.IBlueprint)
 
-    def before_map(self, m):
-        log.debug('Setting up the redirections to the OAuth2 service')
-
-        register_url = config.get('ckanext.oauth2.register_url', None)
-        reset_url = config.get('ckanext.oauth2.reset_url', None)
-        edit_url = config.get('ckanext.oauth2.edit_url', None)
-
-        # We need to handle petitions received to the Callback URL
-        # since some error can arise and we need to process them
-        m.connect('/oauth2/callback',
-                  controller='ckanext.oauth2.controller:OAuth2Controller',
-                  action='callback')
-
-        # # Redirect the user to the OAuth service register page
-        if register_url:
-            m.redirect('/user/register', register_url)
-
-        # Redirect the user to the OAuth service reset page
-        if reset_url:
-            m.redirect('/user/reset', reset_url)
-
-        # Redirect the user to the OAuth service reset page
-        if edit_url:
-            m.redirect('/user/edit/{user}', edit_url)
-
-        return m
-
+    def update_config(self, config):
+        # Add this plugin's templates dir to CKAN's extra_template_paths, so
+        # that CKAN will use this plugin's custom templates.
+        plugins.toolkit.add_template_directory(config, 'templates')
+    
+    # IConfigurable
+    def configure(self, config):
+        # Certain config options must exists for the plugin to work. Raise an
+        # exception if they're missing.
+        missing_config = "{0} is not configured. Please amend your .ini file."
+        config_options = (
+            'ckanext.oauth2.authorization_endpoint',
+            'ckanext.oauth2.token_endpoint',
+            'ckanext.oauth2.profile_api_url',
+            'ckanext.oauth2.client_id',
+            'ckanext.oauth2.client_secret',
+            'ckanext.oauth2.scope',
+            'ckanext.oauth2.rememberer_name',
+            'ckanext.oauth2.profile_api_user_field',
+            'ckanext.oauth2.profile_api_fullname_field',
+            'ckanext.oauth2.profile_api_mail_field',
+            'ckanext.oauth2.profile_api_groupmembership_field',
+            'ckanext.oauth2.sysadmin_group_name'
+        )
+    
+    def get_blueprint(self):
+        return controller.get_blueprint()
+        
     def identify(self):
         log.debug('identify')
 
@@ -206,28 +209,4 @@ class OAuth2Plugin(plugins.SingletonPlugin):
             'request_reset': request_reset
         }
 
-    def update_config(self, config):
-        # Add this plugin's templates dir to CKAN's extra_template_paths, so
-        # that CKAN will use this plugin's custom templates.
-        plugins.toolkit.add_template_directory(config, 'templates')
 
-    # IConfigurable
-
-    def configure(self, config):
-        # Certain config options must exists for the plugin to work. Raise an
-        # exception if they're missing.
-        missing_config = "{0} is not configured. Please amend your .ini file."
-        config_options = (
-            'ckanext.oauth2.authorization_endpoint',
-            'ckanext.oauth2.token_endpoint',
-            'ckanext.oauth2.profile_api_url',
-            'ckanext.oauth2.client_id',
-            'ckanext.oauth2.client_secret',
-            'ckanext.oauth2.scope',
-            'ckanext.oauth2.rememberer_name',
-            'ckanext.oauth2.profile_api_user_field',
-            'ckanext.oauth2.profile_api_fullname_field',
-            'ckanext.oauth2.profile_api_mail_field',
-            'ckanext.oauth2.profile_api_groupmembership_field',
-            'ckanext.oauth2.sysadmin_group_name'
-        )
