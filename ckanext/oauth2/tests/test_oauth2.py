@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (c) 2014 CoNWeT Lab., Universidad Politécnica de Madrid
+# Copyright (c) 2018 Future Internet Consulting and Development Solutions S.L.
 
 # This file is part of OAuth2 CKAN Extension.
 
@@ -17,18 +18,21 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with OAuth2 CKAN Extension.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
+from __future__ import print_function, unicode_literals
+
+from base64 import b64encode, urlsafe_b64encode
 import json
-
-import httpretty
-import ckanext.oauth2.oauth2 as oauth2
-
-from base64 import b64encode
-from ckanext.oauth2.oauth2 import OAuth2Helper
-from mock import MagicMock
-from nose_parameterized import parameterized
-from oauthlib.oauth2 import InsecureTransportError, MissingCodeError, MissingTokenError
+import os
+import unittest
 from urllib import urlencode
+
+import ckanext.oauth2.oauth2 as oauth2
+from ckanext.oauth2.oauth2 import OAuth2Helper
+import httpretty
+from mock import patch, MagicMock
+from parameterized import parameterized
+from oauthlib.oauth2 import InsecureTransportError, MissingCodeError, MissingTokenError
+from requests.exceptions import SSLError
 
 OAUTH2TOKEN = {
     'access_token': 'token',
@@ -62,6 +66,7 @@ class OAuth2PluginTest(unittest.TestCase):
         self._fullname_field = 'fullname'
         self._email_field = 'mail'
         self._profile_api_url = 'https://test/oauth2/user'
+        self._group_field = 'groups'
 
         # Get the functions that can be mocked and affect other tests
         self._toolkit = oauth2.toolkit
@@ -69,6 +74,9 @@ class OAuth2PluginTest(unittest.TestCase):
         self._Session = oauth2.model.Session
         self._db = oauth2.db
         self._OAuth2Session = oauth2.OAuth2Session
+
+        # Mock toolkit
+        oauth2.toolkit = MagicMock()
 
     def tearDown(self):
         # Reset the functions
@@ -78,51 +86,65 @@ class OAuth2PluginTest(unittest.TestCase):
         oauth2.db = self._db
         oauth2.OAuth2Session = self._OAuth2Session
 
-        # Recover the function since it'll be mocked in a test...
-        if getattr(self, 'plugin', None) is not None and getattr(self, '_update_token', None) is not None:
-            self.plugin.update_token = self._update_token
-
-        if getattr(self, 'plugin', None) is not None and getattr(self, '_get_token', None) is not None:
-            self.plugin.get_token = self._get_token
-
-    def _helper(self, fullname_field=True, mail_field=True):
+    def _helper(self, fullname_field=True, mail_field=True, conf=None, missing_conf=None, jwt_enable=False):
         oauth2.db = MagicMock()
+        oauth2.jwt = MagicMock()
 
-        oauth2.config = {
-            'ckanext.oauth2.authorization_endpoint': 'https://test/oauth2/authorize/',
-            'ckanext.oauth2.token_endpoint': 'https://test/oauth2/token/',
-            'ckanext.oauth2.client_id': 'client-id',
-            'ckanext.oauth2.client_secret': 'client-secret',
-            'ckanext.oauth2.profile_api_url': self._profile_api_url,
-            'ckanext.oauth2.profile_api_user_field': self._user_field
+        oauth2.toolkit.config = {
+            'ckan.oauth2.legacy_idm': 'false',
+            'ckan.oauth2.authorization_endpoint': 'https://test/oauth2/authorize/',
+            'ckan.oauth2.token_endpoint': 'https://test/oauth2/token/',
+            'ckan.oauth2.client_id': 'client-id',
+            'ckan.oauth2.client_secret': 'client-secret',
+            'ckan.oauth2.profile_api_url': self._profile_api_url,
+            'ckan.oauth2.profile_api_user_field': self._user_field,
+            'ckan.oauth2.profile_api_mail_field': self._email_field,
         }
+        if conf is not None:
+            oauth2.toolkit.config.update(conf)
+        if missing_conf is not None:
+            del oauth2.toolkit.config[missing_conf]
 
         helper = OAuth2Helper()
 
         if fullname_field:
             helper.profile_api_fullname_field = self._fullname_field
 
-        if mail_field:
-            helper.profile_api_mail_field = self._email_field
+        if jwt_enable:
+            helper.jwt_enable = True
 
         return helper
 
-    def test_get_token_with_no_credentials(self):
-        oauth2.toolkit = MagicMock()
+    @parameterized.expand([
+        ("ckan.oauth2.authorization_endpoint"),
+        ("ckan.oauth2.token_endpoint"),
+        ("ckan.oauth2.client_id"),
+        ("ckan.oauth2.client_secret"),
+        ("ckan.oauth2.profile_api_url"),
+        ("ckan.oauth2.profile_api_user_field"),
+        ("ckan.oauth2.profile_api_mail_field"),
+    ])
+    def test_minimum_conf(self, conf_to_remove):
+        with self.assertRaises(ValueError):
+            self._helper(missing_conf=conf_to_remove)
+
+    @patch('ckanext.oauth2.oauth2.OAuth2Session')
+    def test_get_token_with_no_credentials(self, oauth2_session_mock):
         state = b64encode(json.dumps({'came_from': 'initial-page'}))
         oauth2.toolkit.request = make_request(True, 'data.com', 'callback', {'state': state})
 
         helper = self._helper()
 
+        oauth2_session_mock().fetch_token.side_effect = MissingCodeError("Missing code parameter in response.")
         with self.assertRaises(MissingCodeError):
             helper.get_token()
 
-    @httpretty.activate
-    def test_get_token(self):
-        oauth2.toolkit = MagicMock()
+    @patch('ckanext.oauth2.oauth2.OAuth2Session')
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_get_token(self, OAuth2Session):
         helper = self._helper()
         token = OAUTH2TOKEN
-        httpretty.register_uri(httpretty.POST, helper.token_endpoint, body=json.dumps(token))
+        OAuth2Session().fetch_token.return_value = OAUTH2TOKEN
 
         state = b64encode(json.dumps({'came_from': 'initial-page'}))
         oauth2.toolkit.request = make_request(True, 'data.com', 'callback', {'state': state, 'code': 'code'})
@@ -132,9 +154,37 @@ class OAuth2PluginTest(unittest.TestCase):
             self.assertIn(key, retrieved_token)
             self.assertEquals(token[key], retrieved_token[key])
 
+    @patch('ckanext.oauth2.oauth2.OAuth2Session')
+    def test_get_token_legacy_idm(self, OAuth2Session):
+        helper = self._helper()
+        helper.legacy_idm = True
+        helper.verify_https = True
+        OAuth2Session().fetch_token.return_value = OAUTH2TOKEN
+
+        state = b64encode(json.dumps({'came_from': 'initial-page'}))
+        oauth2.toolkit.request = make_request(True, 'data.com', 'callback', {'state': state, 'code': 'code'})
+        retrieved_token = helper.get_token()
+
+        expected_headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': 'Basic %s' % urlsafe_b64encode(
+                '%s:%s' % (helper.client_id, helper.client_secret)
+            )
+        }
+
+        OAuth2Session().fetch_token.assert_called_once_with(
+            helper.token_endpoint,
+            headers=expected_headers,
+            client_secret=helper.client_secret,
+            authorization_response=oauth2.toolkit.request.url,
+            verify=True
+        )
+        self.assertEqual(retrieved_token, OAUTH2TOKEN)
+
     @httpretty.activate
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
     def test_get_token_insecure(self):
-        oauth2.toolkit = MagicMock()
         helper = self._helper()
         token = OAUTH2TOKEN
         httpretty.register_uri(httpretty.POST, helper.token_endpoint, body=json.dumps(token))
@@ -146,11 +196,55 @@ class OAuth2PluginTest(unittest.TestCase):
             helper.get_token()
 
     @httpretty.activate
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_get_token_invalid_cert(self):
+        helper = self._helper()
+        token = OAUTH2TOKEN
+        httpretty.register_uri(httpretty.POST, helper.token_endpoint, body=json.dumps(token))
+
+        state = b64encode(json.dumps({'came_from': 'initial-page'}))
+        oauth2.toolkit.request = make_request(True, 'data.com', 'callback', {'state': state, 'code': 'code'})
+
+        with self.assertRaises(InsecureTransportError):
+            with patch('ckanext.oauth2.oauth2.OAuth2Session') as oauth2_session_mock:
+                oauth2_session_mock().fetch_token.side_effect = SSLError('(Caused by SSLError(SSLError("bad handshake: Error([(\'SSL routines\', \'tls_process_server_certificate\', \'certificate verify failed\')],)",),)')
+                helper.get_token()
+
+    @httpretty.activate
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_get_token_unexpected_ssl_error(self):
+        helper = self._helper()
+        token = OAUTH2TOKEN
+        httpretty.register_uri(httpretty.POST, helper.token_endpoint, body=json.dumps(token))
+
+        state = b64encode(json.dumps({'came_from': 'initial-page'}))
+        oauth2.toolkit.request = make_request(True, 'data.com', 'callback', {'state': state, 'code': 'code'})
+
+        with self.assertRaises(SSLError):
+            with patch('ckanext.oauth2.oauth2.OAuth2Session') as oauth2_session_mock:
+                oauth2_session_mock().fetch_token.side_effect = SSLError('unexpected error')
+                helper.get_token()
+
+    @httpretty.activate
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': 'True'})
+    def test_get_token_insecure_enabled(self):
+        helper = self._helper()
+        token = OAUTH2TOKEN
+        httpretty.register_uri(httpretty.POST, helper.token_endpoint, body=json.dumps(token))
+
+        state = b64encode(json.dumps({'came_from': 'initial-page'}))
+        oauth2.toolkit.request = make_request(False, 'data.com', 'callback', {'state': state, 'code': 'code'})
+        retrieved_token = helper.get_token()
+
+        for key in token:
+            self.assertIn(key, retrieved_token)
+            self.assertEquals(token[key], retrieved_token[key])
+
+    @httpretty.activate
     def test_get_token_error(self):
-        oauth2.toolkit = MagicMock()
         helper = self._helper()
         token = {
-            'error': 'auth_error',
+            'info': 'auth_error',
             'error_description': 'Some description'
         }
         httpretty.register_uri(httpretty.POST, helper.token_endpoint, body=json.dumps(token))
@@ -170,7 +264,6 @@ class OAuth2PluginTest(unittest.TestCase):
         user_name = 'user_name'
 
         # Configure the mocks
-        oauth2.toolkit = MagicMock()
         environ = MagicMock()
         plugins = MagicMock()
         authenticator = MagicMock()
@@ -200,9 +293,7 @@ class OAuth2PluginTest(unittest.TestCase):
         request.headers = {}
         came_from = '/came_from_example'
 
-        oauth2.toolkit = MagicMock()
         oauth2.toolkit.request = request
-        oauth2.toolkit.response = MagicMock()
 
         # Call the method
         helper.challenge(came_from)
@@ -210,58 +301,58 @@ class OAuth2PluginTest(unittest.TestCase):
         # Check
         state = urlencode({'state': b64encode(bytes(json.dumps({'came_from': came_from})))})
         expected_url = 'https://test/oauth2/authorize/?response_type=code&client_id=client-id&' + \
-                       'redirect_uri=http%3A%2F%2Flocalhost%2Foauth2%2Fcallback&' + state
-        self.assertEquals(302, oauth2.toolkit.response.status)
-        self.assertEquals(expected_url, oauth2.toolkit.response.location)
+                       'redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Foauth2%2Fcallback&' + state
+        oauth2.toolkit.redirect_to.assert_called_once_with(expected_url)
 
     @parameterized.expand([
         ('test_user', 'Test User Full Name', 'test@test.com'),
-        ('test_user', None, 'test@test.com'),
-        ('test_user', 'Test User Full Name', None),
+        ('test_user', None,                  'test@test.com'),
+        # ('test_user', 'Test User Full Name',  None),
         ('test_user', 'Test User Full Name', 'test@test.com', False),
-        ('test_user', None, 'test@test.com', False),
-        ('test_user', 'Test User Full Name', None, False),
+        ('test_user', None,                  'test@test.com', False),
+        ('test_user', None,                  'test@test.com', False, False, False),
+        ('test_user', None,                  'test@test.com', False, False, True),
+        ('test_user', 'Test User Full Name', 'test@test.com', True, True),
+        ('test_user', 'Test User Full Name', 'test@test.com', True, False),
         ('test_user', 'Test User Full Name', 'test@test.com', True, True, True),
-        ('test_user', None, 'test@test.com', True, True, True),
-        ('test_user', 'Test User Full Name', None, True, True, True),
-        ('test_user', 'Test User Full Name', 'test@test.com', True, True, True),
-        ('test_user', 'Test User Full Name', 'test@test.com', True, False, True),
-        ('test_user', None, 'test@test.com', True, False, True),
         ('test_user', 'Test User Full Name', 'test@test.com', True, True, False),
-        ('test_user', 'Test User Full Name', None, True, True, False),
-        ('test_user', 'Test User Full Name', 'test@test.com', True, False, False),
-        ('test_user', None, None, True, False, False)
+        ('test_user', None,                  'test@test.com', True, True),
+        # ('test_user', 'Test User Full Name', None, True, True),
+        ('test_user', None,                  'test@test.com', True, False),
     ])
     @httpretty.activate
     def test_identify(self, username, fullname=None, email=None, user_exists=True,
-                      fullname_field=True, email_field=True):
+                      fullname_field=True, sysadmin=None):
 
-        self.helper = helper = self._helper(fullname_field, email_field)
+        self.helper = helper = self._helper(fullname_field)
 
         # Simulate the HTTP Request
         user_info = {}
         user_info[self._user_field] = username
+        user_info[self._email_field] = email
 
         if fullname:
             user_info[self._fullname_field] = fullname
 
-        if email:
-            user_info[self._email_field] = email
+        if sysadmin is not None:
+            self.helper.profile_api_groupmembership_field = self._group_field
+            self.helper.sysadmin_group_name = "admin"
+            user_info[self._group_field] = "admin" if sysadmin else "other"
 
         httpretty.register_uri(httpretty.GET, self._profile_api_url, body=json.dumps(user_info))
 
+        print(username, fullname, email, user_exists, fullname_field, sysadmin)
+
         # Create the mocks
-        request = MagicMock()
         request = make_request(False, 'localhost', '/oauth2/callback', {})
-        oauth2.toolkit = MagicMock()
         oauth2.toolkit.request = request
         oauth2.model.Session = MagicMock()
         user = MagicMock()
-        user.name = username
+        user.name = None
         user.fullname = None
-        user.email = None
+        user.email = email
         oauth2.model.User = MagicMock(return_value=user)
-        oauth2.model.User.by_name = MagicMock(return_value=user if user_exists else None)
+        oauth2.model.User.by_email = MagicMock(return_value=[user] if user_exists else [])
 
         # Call the function
         returned_username = helper.identify(OAUTH2TOKEN)
@@ -270,26 +361,49 @@ class OAuth2PluginTest(unittest.TestCase):
         self.assertEquals(username, returned_username)
 
         # Asserts
-        oauth2.model.User.by_name.assert_called_once_with(username)
+        oauth2.model.User.by_email.assert_called_once_with(email)
 
         # Check if the user is created or not
         if not user_exists:
-            oauth2.model.User.assert_called_once_with(name=username)
+            oauth2.model.User.assert_called_once_with(email=email)
         else:
             self.assertEquals(0, oauth2.model.User.called)
 
         # Check that user properties are set properly
+        self.assertEquals(username, user.name)
+        self.assertEquals(email, user.email)
+        if sysadmin is not None:
+            self.assertEquals(sysadmin, user.sysadmin)
+
         if fullname and fullname_field:
             self.assertEquals(fullname, user.fullname)
         else:
             self.assertEquals(None, user.fullname)
 
-        if email and email_field:
-            self.assertEquals(email, user.email)
-        else:
-            self.assertEquals(None, user.email)
-
         # Check that the user is saved
+        oauth2.model.Session.add.assert_called_once_with(user)
+        oauth2.model.Session.commit.assert_called_once()
+        oauth2.model.Session.remove.assert_called_once()
+
+    def test_identify_jwt(self):
+
+        helper = self._helper(jwt_enable=True)
+        token = OAUTH2TOKEN
+        user_data ={self._user_field: 'test_user', self._email_field: 'test@test.com'}
+
+        oauth2.jwt.decode.return_value = user_data
+
+        oauth2.model.Session = MagicMock()
+        user = MagicMock()
+        user.name = None
+        user.email = None
+        oauth2.model.User = MagicMock(return_value=user)
+        oauth2.model.User.by_email = MagicMock(return_value=[user])
+
+        returned_username = helper.identify(token)
+
+        self.assertEquals(user_data[self._user_field], returned_username)
+
         oauth2.model.Session.add.assert_called_once_with(user)
         oauth2.model.Session.commit.assert_called_once()
         oauth2.model.Session.remove.assert_called_once()
@@ -317,6 +431,39 @@ class OAuth2PluginTest(unittest.TestCase):
 
         self.assertTrue(exception_risen)
 
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_identify_invalid_cert(self):
+
+        helper = self._helper()
+        token = {'access_token': 'OAUTH_TOKEN'}
+
+        with self.assertRaises(InsecureTransportError):
+            with patch('ckanext.oauth2.oauth2.OAuth2Session') as oauth2_session_mock:
+                oauth2_session_mock().get.side_effect = SSLError('(Caused by SSLError(SSLError("bad handshake: Error([(\'SSL routines\', \'tls_process_server_certificate\', \'certificate verify failed\')],)",),)')
+                helper.identify(token)
+
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_identify_invalid_cert_legacy(self):
+
+        helper = self._helper(conf={"ckan.oauth2.legacy_idm": "True"})
+        token = {'access_token': 'OAUTH_TOKEN'}
+
+        with self.assertRaises(InsecureTransportError):
+            with patch('ckanext.oauth2.oauth2.requests.get') as requests_get_mock:
+                requests_get_mock.side_effect = SSLError('(Caused by SSLError(SSLError("bad handshake: Error([(\'SSL routines\', \'tls_process_server_certificate\', \'certificate verify failed\')],)",),)')
+                helper.identify(token)
+
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_identify_unexpected_ssl_error(self):
+
+        helper = self._helper()
+        token = {'access_token': 'OAUTH_TOKEN'}
+
+        with self.assertRaises(SSLError):
+            with patch('ckanext.oauth2.oauth2.OAuth2Session') as oauth2_session_mock:
+                oauth2_session_mock().get.side_effect = SSLError('unexpected error')
+                helper.identify(token)
+
     def test_get_stored_token_non_existing_user(self):
         helper = self._helper()
         oauth2.db.UserToken.by_user_name = MagicMock(return_value=None)
@@ -339,7 +486,6 @@ class OAuth2PluginTest(unittest.TestCase):
         ({},)
     ])
     def test_redirect_from_callback(self, identity):
-        oauth2.toolkit = MagicMock()
         came_from = 'initial-page'
         state = b64encode(json.dumps({'came_from': came_from}))
         oauth2.toolkit.request = make_request(True, 'data.com', 'callback', {'state': state, 'code': 'code'})
@@ -351,10 +497,12 @@ class OAuth2PluginTest(unittest.TestCase):
         self.assertEquals(came_from, oauth2.toolkit.response.location)
 
     @parameterized.expand([
-        (True,),
-        (False,)
+        (True, True),
+        (True, False),
+        (False, False),
+        (False, True),
     ])
-    def test_update_token(self, user_exists):
+    def test_update_token(self, user_exists, jwt_expires_in):
         helper = self._helper()
         user = 'user'
 
@@ -373,31 +521,54 @@ class OAuth2PluginTest(unittest.TestCase):
         oauth2.db.UserToken.by_user_name = MagicMock(return_value=usertoken)
 
         # The token to be updated
-        newtoken = {
-            'access_token': 'new_access_token',
-            'token_type': 'new_token_type',
-            'expires_in': 'new_expires_in',
-            'refresh_token': 'new_refresh_token'
-        }
+        if jwt_expires_in:
+            newtoken = {
+                'access_token': 'new_access_token',
+                'token_type': 'new_token_type',
+                'expires_in': 'new_expires_in',
+                'refresh_token': 'new_refresh_token'
+            }
+            helper.update_token('user', newtoken)
 
-        helper.update_token('user', newtoken)
+            # Check that the object has been stored
+            oauth2.model.Session.add.assert_called_once()
+            oauth2.model.Session.commit.assert_called_once()
 
-        # Check that the object has been stored
-        oauth2.model.Session.add.assert_called_once()
-        oauth2.model.Session.commit.assert_called_once()
+            # Check that the object contains the correct information
+            tk = oauth2.model.Session.add.call_args_list[0][0][0]
+            self.assertEquals(user, tk.user_name)
+            self.assertEquals(newtoken['access_token'], tk.access_token)
+            self.assertEquals(newtoken['token_type'], tk.token_type)
+            self.assertEquals(newtoken['expires_in'], tk.expires_in)
+            self.assertEquals(newtoken['refresh_token'], tk.refresh_token)
+        else:
+            newtoken = {
+                'access_token': 'new_access_token',
+                'token_type': 'new_token_type',
+                'refresh_token': 'new_refresh_token'
+            }
+            expires_in_data = {'exp': 3600, 'iat': 0}
+            oauth2.jwt.decode.return_value = expires_in_data
+            helper.update_token('user', newtoken)
 
-        # Check that the object contains the correct information
-        tk = oauth2.model.Session.add.call_args_list[0][0][0]
-        self.assertEquals(user, tk.user_name)
-        self.assertEquals(newtoken['access_token'], tk.access_token)
-        self.assertEquals(newtoken['token_type'], tk.token_type)
-        self.assertEquals(newtoken['expires_in'], tk.expires_in)
-        self.assertEquals(newtoken['refresh_token'], tk.refresh_token)
+            # Check that the object has been stored
+            oauth2.model.Session.add.assert_called_once()
+            oauth2.model.Session.commit.assert_called_once()
+
+            # Check that the object contains the correct information
+            tk = oauth2.model.Session.add.call_args_list[0][0][0]
+            self.assertEquals(user, tk.user_name)
+            self.assertEquals(newtoken['access_token'], tk.access_token)
+            self.assertEquals(newtoken['token_type'], tk.token_type)
+            self.assertEquals(3600, tk.expires_in)
+            self.assertEquals(newtoken['refresh_token'], tk.refresh_token)
+
 
     @parameterized.expand([
         (True,),
         (False,)
     ])
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': '', 'REQUESTS_CA_BUNDLE': ''})
     def test_refresh_token(self, user_exists):
         username = 'user'
         helper = self.helper = self._helper()
@@ -407,10 +578,6 @@ class OAuth2PluginTest(unittest.TestCase):
             current_token = OAUTH2TOKEN
         else:
             current_token = None
-
-        # save functions that will be mocked (they'll be recovered in tearDown)
-        self._get_token = self.helper.get_token
-        self._update_token = self.helper.update_token
 
         # mock plugin functions
         helper.get_stored_token = MagicMock(return_value=current_token)
@@ -434,10 +601,38 @@ class OAuth2PluginTest(unittest.TestCase):
             self.assertEquals(newtoken, result)
             helper.get_stored_token.assert_called_once_with(username)
             oauth2.OAuth2Session.assert_called_once_with(helper.client_id, token=current_token, scope=helper.scope)
-            session.refresh_token.assert_called_once_with(helper.token_endpoint, client_secret=helper.client_secret, client_id=helper.client_id)
+            session.refresh_token.assert_called_once_with(helper.token_endpoint, client_secret=helper.client_secret, client_id=helper.client_id, verify=True)
             helper.update_token.assert_called_once_with(username, newtoken)
         else:
             self.assertIsNone(result)
             self.assertEquals(0, oauth2.OAuth2Session.call_count)
             self.assertEquals(0, session.refresh_token.call_count)
             self.assertEquals(0, helper.update_token.call_count)
+
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_refresh_token_invalid_cert(self):
+        username = 'user'
+        current_token = OAUTH2TOKEN
+        helper = self._helper()
+
+        # mock plugin functions
+        helper.get_stored_token = MagicMock(return_value=current_token)
+
+        with self.assertRaises(InsecureTransportError):
+            with patch('ckanext.oauth2.oauth2.OAuth2Session') as oauth2_session_mock:
+                oauth2_session_mock().refresh_token.side_effect = SSLError('(Caused by SSLError(SSLError("bad handshake: Error([(\'SSL routines\', \'tls_process_server_certificate\', \'certificate verify failed\')],)",),)')
+                helper.refresh_token(username)
+
+    @patch.dict(os.environ, {'OAUTHLIB_INSECURE_TRANSPORT': ''})
+    def test_refresh_token_unexpected_ssl_error(self):
+        username = 'user'
+        current_token = OAUTH2TOKEN
+        helper = self._helper()
+
+        # mock plugin functions
+        helper.get_stored_token = MagicMock(return_value=current_token)
+
+        with self.assertRaises(SSLError):
+            with patch('ckanext.oauth2.oauth2.OAuth2Session') as oauth2_session_mock:
+                oauth2_session_mock().refresh_token.side_effect = SSLError('unexpected error')
+                helper.refresh_token(username)

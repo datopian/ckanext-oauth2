@@ -75,22 +75,25 @@ setup(
         'nose>=1.3.0'
     ],
     install_requires=[
-        'requests-oauthlib==0.5.0',
+        'requests-oauthlib==0.8.0',
+        'pyjwt==1.7.1',
     ],
     tests_require=[
-        'nose_parameterized==0.3.3',
-        'selenium==2.46.0'
+        'parameterized',
+        'selenium==3.5.0'
     ],
     test_suite='nosetests',
     entry_points={
         'ckan.plugins': [
             'oauth2 = ckanext.oauth2.plugin:OAuth2Plugin',
+        ],
+        'nose.plugins': [
+            'pylons = pylons.test:PylonsPlugin'
         ]
     },
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Web Environment",
-        'Framework :: Pylons',
         'Intended Audience :: Developers',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',

@@ -1,0 +1,12 @@
+providers:
+  - name: github
+    authorization_endpoint: https://github.com/login/oauth/authorize
+    token_endpoint:  https://github.com/login/oauth/access_token
+    profile_api_url: https://api.github.com/user/emails
+    client_id: <your client id>
+    client_secret: <your client secret>
+    scope: read:user,user:email
+    profile_api_user_field: login
+    profile_api_fullname_field : name
+    profile_api_mail_field : email
+    

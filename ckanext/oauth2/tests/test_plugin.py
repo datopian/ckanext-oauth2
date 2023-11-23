@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (c) 2014 CoNWeT Lab., Universidad Politécnica de Madrid
+# Copyright (c) 2018 Future Internet Consulting and Development Solutions S.L.
 
 # This file is part of OAuth2 CKAN Extension.
 
@@ -20,37 +21,33 @@
 import unittest
 import ckanext.oauth2.plugin as plugin
 
-from mock import MagicMock
-from nose_parameterized import parameterized
+from mock import MagicMock, patch
+from parameterized import parameterized
 
-AUTHORIZATION_HEADER = 'Custom_Header'
-HOST = 'data.lab.fiware.org'
+CUSTOM_AUTHORIZATION_HEADER = 'x-auth-token'
+OAUTH2_AUTHORIZATION_HEADER = 'authorization'
+HOST = 'ckan.example.org'
 
 
 class PluginTest(unittest.TestCase):
 
     def setUp(self):
         # Save functions and mock them
-        self._config = plugin.config
-        plugin.config = {'ckan.oauth2.authorization_header': AUTHORIZATION_HEADER}
 
         self._toolkit = plugin.toolkit
         plugin.toolkit = MagicMock()
-
-        self._session = plugin.session
-        plugin.session = MagicMock()
+        plugin.toolkit.config = {'ckan.oauth2.authorization_header': OAUTH2_AUTHORIZATION_HEADER}
 
         self._oauth2 = plugin.oauth2
         plugin.oauth2 = MagicMock()
 
         # Create the plugin
         self._plugin = plugin.OAuth2Plugin()
+        self._plugin.update_config(plugin.toolkit.config)
 
     def tearDown(self):
         # Unmock functions
-        plugin.config = self._config
         plugin.toolkit = self._toolkit
-        plugin.session = self._session
 
     def _set_identity(self, identity):
         plugin.toolkit.request.environ = {}
@@ -67,16 +64,18 @@ class PluginTest(unittest.TestCase):
     def test_before_map(self, register_url=None, reset_url=None, edit_url=None):
 
         # Setup the config dictionary
-        plugin.config = {}
+        plugin.toolkit.config = {}
 
         if register_url:
-            plugin.config['ckan.oauth2.register_url'] = register_url
+            plugin.toolkit.config['ckan.oauth2.register_url'] = register_url
 
         if reset_url:
-            plugin.config['ckan.oauth2.reset_url'] = reset_url
+            plugin.toolkit.config['ckan.oauth2.reset_url'] = reset_url
 
         if edit_url:
-            plugin.config['ckan.oauth2.edit_url'] = edit_url
+            plugin.toolkit.config['ckan.oauth2.edit_url'] = edit_url
+
+        self._plugin.update_config(plugin.toolkit.config)
 
         # In this case we need a own instance of the plugin, so we create it
         self._plugin = plugin.OAuth2Plugin()
@@ -112,16 +111,39 @@ class PluginTest(unittest.TestCase):
             self.assertEquals(False, function_result['success'])
 
     @parameterized.expand([
-        (),
-        ({},                                None,                      'test',  'test'),
-        ({AUTHORIZATION_HEADER: 'api_key'}, 'test',                    None,    'test'),
-        ({AUTHORIZATION_HEADER: 'api_key'}, 'test',                    'test2', 'test'),
-        ({AUTHORIZATION_HEADER: 'api_key'}, ValueError('Invalid Key'), 'test2', 'test2'),
-        ({AUTHORIZATION_HEADER: 'api_key'}, None,                      'test2', 'test2'),
-        ({'invalid_header': 'api_key'},     'test',                    None,    None),
-        ({'invalid_header': 'api_key'},     'test',                    'test2', 'test2'),
+        ({},                                              None,                      None,    None,    False),
+        ({},                                              None,                      None,    None,    True),
+
+        ({},                                              None,                      'test',  'test',  False),
+        ({},                                              None,                      'test',  'test',  True),
+
+        ({'invalid_header': 'api_key'},                   None,                      None,    None,    False),
+        ({'invalid_header': 'api_key'},                   None,                      'test2', 'test2', False),
+        ({'invalid_header': 'api_key'},                   None,                      None,    None,    True),
+        ({'invalid_header': 'api_key'},                   None,                      'test2', 'test2', True),
+
+        ({OAUTH2_AUTHORIZATION_HEADER: 'Bearer api_key'}, 'test',                    None,    'test',  True),
+        ({OAUTH2_AUTHORIZATION_HEADER: 'Bearer api_key'}, 'test',                    'test2', 'test',  True),
+        ({OAUTH2_AUTHORIZATION_HEADER: 'Bearer api_key'}, ValueError('Invalid Key'), 'test2', 'test2', True),
+        ({OAUTH2_AUTHORIZATION_HEADER: 'Bearer api_key'}, ValueError('Invalid Key'), None,    None,    True),
+        ({OAUTH2_AUTHORIZATION_HEADER: 'Bearer api_key'}, None,                      'test2', 'test2', True),
+        ({OAUTH2_AUTHORIZATION_HEADER: 'Otherr api_key'}, None,                      None,    None,    True),
+        ({OAUTH2_AUTHORIZATION_HEADER: 'api_key'},        None,                      'test2', 'test2', True),
+        ({OAUTH2_AUTHORIZATION_HEADER: 'api_key'},        None,                      None,    None,    True),
+
+        ({CUSTOM_AUTHORIZATION_HEADER: 'api_key'},        'test',                    None,    'test',  False),
+        ({CUSTOM_AUTHORIZATION_HEADER: 'api_key'},        'test',                    'test2', 'test',  False),
+        ({CUSTOM_AUTHORIZATION_HEADER: 'api_key'},        ValueError('Invalid Key'), 'test2', 'test2', False),
+        ({CUSTOM_AUTHORIZATION_HEADER: 'api_key'},        ValueError('Invalid Key'), None,    None,    False),
+        ({CUSTOM_AUTHORIZATION_HEADER: 'api_key'},        None,                      'test2', 'test2', False),
+
     ])
-    def test_identify(self, headers={}, authenticate_result=None, identity=None, expected_user=None):
+    @patch("ckanext.oauth2.plugin.g")
+    def test_identify(self, headers, authenticate_result, identity, expected_user, oauth2, g_mock):
+
+        if not oauth2:
+            plugin.toolkit.config = {'ckan.oauth2.authorization_header': CUSTOM_AUTHORIZATION_HEADER}
+            self._plugin.update_config(plugin.toolkit.config)
 
         self._set_identity(identity)
 
@@ -144,9 +166,9 @@ class PluginTest(unittest.TestCase):
             else:
                 return authenticate_result
 
-        plugin.oauth2.OAuth2Helper.return_value.identify.side_effect = authenticate_side_effect
-        plugin.oauth2.OAuth2Helper.return_value.get_stored_token = MagicMock(return_value=usertoken)
-        plugin.oauth2.OAuth2Helper.return_value.refresh_token = MagicMock(return_value=newtoken)
+        self._plugin.oauth2helper.identify = MagicMock(side_effect=authenticate_side_effect)
+        self._plugin.oauth2helper.get_stored_token = MagicMock(return_value=usertoken)
+        self._plugin.oauth2helper.refresh_token = MagicMock(return_value=newtoken)
 
         # Authentication header is not included
         plugin.toolkit.request.headers = headers
@@ -160,13 +182,16 @@ class PluginTest(unittest.TestCase):
         self._plugin.identify()
 
         # Check that the function "authenticate" (called when the API Key is included) has not been called
-        if headers and AUTHORIZATION_HEADER in headers:
-            plugin.oauth2.OAuth2Helper.return_value.identify.assert_called_once_with({'access_token': headers[AUTHORIZATION_HEADER]})
+        if oauth2 and OAUTH2_AUTHORIZATION_HEADER in headers and headers[OAUTH2_AUTHORIZATION_HEADER].startswith('Bearer '):
+            token = headers[OAUTH2_AUTHORIZATION_HEADER].replace('Bearer ', '')
+            self._plugin.oauth2helper.identify.assert_called_once_with({'access_token': token})
+        elif not oauth2 and CUSTOM_AUTHORIZATION_HEADER in headers:
+            self._plugin.oauth2helper.identify.assert_called_once_with({'access_token': headers[CUSTOM_AUTHORIZATION_HEADER]})
         else:
-            self.assertEquals(0, plugin.oauth2.OAuth2Helper.return_value.identify.call_count)
+            self.assertEquals(0, self._plugin.oauth2helper.identify.call_count)
 
+        self.assertEquals(expected_user, g_mock.user)
         self.assertEquals(expected_user, plugin.toolkit.c.user)
-        plugin.session.save.assert_called_once()
 
         if expected_user is None:
             self.assertIsNone(plugin.toolkit.c.usertoken)
@@ -176,92 +201,5 @@ class PluginTest(unittest.TestCase):
 
             # method 'usertoken_refresh' should relay on the one provided by the repoze.who module
             plugin.toolkit.c.usertoken_refresh()
-            plugin.oauth2.OAuth2Helper.return_value.refresh_token.assert_called_once_with(expected_user)
+            self._plugin.oauth2helper.refresh_token.assert_called_once_with(expected_user)
             self.assertEquals(newtoken, plugin.toolkit.c.usertoken)
-
-    @parameterized.expand([
-        (),
-        (None,                        None,               '/dashboard'),
-        ('/about',                    None,               '/about'),
-        ('/about',                    '/ckan-admin',      '/ckan-admin'),
-        (None,                        '/ckan-admin',      '/ckan-admin'),
-        ('/',                         None,               '/dashboard'),
-        ('/user/logged_out_redirect', None,               '/dashboard'),
-        ('/',                         '/ckan-admin',      '/ckan-admin'),
-        ('/user/logged_out_redirect', '/ckan-admin',      '/ckan-admin'),
-        ('http://google.es',          None,               '/dashboard'),
-        ('http://google.es',          None,               '/dashboard')
-    ])
-    def test_login(self, referer=None, came_from=None, expected_referer='/dashboard'):
-
-        # The login function will check these variables
-        plugin.toolkit.request.headers = {}
-        plugin.toolkit.request.params = {}
-
-        if referer:
-            plugin.toolkit.request.headers['Referer'] = referer
-
-        if came_from:
-            plugin.toolkit.request.params['came_from'] = came_from
-
-        # Call the function
-        self._plugin.login()
-
-        plugin.oauth2.OAuth2Helper.return_value.challenge.assert_called_once_with(expected_referer)
-
-    @parameterized.expand([
-        (),
-        ('user', None,                        None,               None,                                     '/'),
-        ('user', None,                        None,               {'Param1': 'value1', 'paRam2': 'value2'}, '/'),
-        ('user', '/about',                    None,               None,                                     '/about'),
-        ('user', '/about',                    '/ckan-admin',      None,                                     '/ckan-admin'),
-        ('user', None,                        '/ckan-admin',      None,                                     '/ckan-admin'),
-        ('user', '/',                         None,               None,                                     '/'),
-        ('user', '/user/logged_out_redirect', None,               None,                                     '/'),
-        ('user', '/',                         '/ckan-admin',      None,                                     '/ckan-admin'),
-        ('user', '/user/logged_out_redirect', '/ckan-admin',      None,                                     '/ckan-admin'),
-        ('user', 'http://google.es',          None,               None,                                     '/'),
-        ('user', 'http://google.es',          None,               None,                                     '/'),
-        ('user', 'http://' + HOST + '/about', None,               None,                                     'http://' + HOST + '/about'),
-        ('user', 'http://' + HOST + '/about', '/other_url',       None,                                     '/other_url'),
-        (None,   '/about',                    '/other',           None,                                     None),
-    ])
-    def test_abort(self, user='user', referer=None, came_from=None, headers=None, expected_location='/'):
-
-        # The abort function will check these variables
-        plugin.toolkit.c.user = user
-        plugin.toolkit.request.host = HOST
-        plugin.toolkit.request.headers = {}
-        plugin.toolkit.request.params = {}
-
-        if referer:
-            plugin.toolkit.request.headers['Referer'] = referer
-
-        if came_from:
-            plugin.toolkit.request.params['came_from'] = came_from
-
-        # Call the function
-        initial_status_code = 401
-        initial_detail = 'DETAIL'
-        initial_headers = None if not headers else headers.copy()
-        initial_comment = 'COMMENT'
-
-        # headers will be modified inside the function, but we should retain a copy (initial_headers)
-        status_code, detail, new_headers, comment = self._plugin.abort(initial_status_code, initial_detail, headers, initial_comment)
-
-        # Verifications
-        self.assertEquals(initial_detail, detail)
-        self.assertEquals(initial_comment, comment)
-
-        if user:
-            self.assertEquals(302, status_code)
-            self.assertEquals(new_headers['Location'], expected_location)
-        else:
-            self.assertEquals(initial_status_code, status_code)
-            self.assertEquals(initial_headers, new_headers)
-
-        # Check previous headers if they were not None
-        if initial_headers:
-            for header in initial_headers:
-                self.assertIn(header, new_headers)
-                self.assertEquals(initial_headers[header], new_headers[header])

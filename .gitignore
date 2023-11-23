@@ -1,10 +1,13 @@
 *.py[cod]
 
+# Mac OS
+.DS_Store
+
 # C extensions
 *.so
 
 # Packages
-*.egg
+*.eggs
 *.egg-info
 dist
 build
@@ -33,3 +36,5 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+.idea
+venv
