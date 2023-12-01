@@ -1,0 +1,34 @@
+{% extends "page.html" %}
+
+{% block subtitle %}{{ _("Profile information") }}{% endblock %}
+
+
+{% block primary_content %}
+<article class="module">
+  <div class="module-content">
+    {% block primary_content_inner %}
+    {{ self.flash() }}
+    <h1>{{ _('Account is in review') }}</h1>
+    <p class="alert alert-warning">{{ _('Your account is currently under review by an administrator. You will receive an
+      email email upon approval.') }}</p>
+    {% endblock %}
+  </div>
+</article>
+{% endblock %}
+
+{% block secondary_content %}
+{% block help %}
+<section class="module module-narrow module-shallow">
+  {% block help_inner %}
+  <h2 class="module-heading">{{ _('Need Help?') }}</h2>
+  <div class="module-content">
+    <p>{% trans %}
+      Haven't received an email? Please check your spam folder. If you still can't find it, please contact system
+      administrator.
+      {% endtrans %}
+    </p>
+  </div>
+  {% endblock %}
+</section>
+{% endblock %}
+{% endblock %}

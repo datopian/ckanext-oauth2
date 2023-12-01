@@ -1,0 +1,7 @@
+oauth2-css:
+  filter: cssrewrite
+  output: ckanext-oauth2/%(version)s-oauth2.css
+  contents:
+    - style.css
+
+    

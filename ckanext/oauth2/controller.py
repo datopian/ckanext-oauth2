@@ -21,14 +21,16 @@
 from __future__ import unicode_literals
 
 import logging
-
+from flask.views import MethodView
 from flask import Blueprint, redirect
 from urllib.parse import urlparse
+import ckan.model as model
 
 from ckan.common import session
 import ckan.lib.helpers as helpers
 import ckan.plugins.toolkit as toolkit
 from ckanext.oauth2 import constants
+from ckanext.oauth2 import db
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +74,23 @@ def login(provider):
     return toolkit.redirect_to(auth_url)
 
 
+def __set_incomplete_registration_session(user, provider):
+    session["incomplete_registration"] = {
+        "id": user.id,
+        "provider": provider,
+    }
+
+
+def __remove_incomplete_registration_session_if_exists():
+    if "incomplete_registration" in session:
+        session.pop("incomplete_registration", None)
+
+
+def __login_and_redirect(oauth2helper, user, token):
+    oauth2helper.login_user(user)
+    oauth2helper.update_token(user.name, token)
+    return oauth2helper.redirect_from_callback()
+
 
 def callback(provider):
     from ckanext.oauth2 import oauth2
@@ -81,62 +100,140 @@ def callback(provider):
     try:
         token = oauth2helper.get_token()
         user = oauth2helper.identify(token)
-        oauth2helper.login_user(user)
-        oauth2helper.update_token(user.name, token)
-        return oauth2helper.redirect_from_callback()
+
+        if toolkit.config.get(
+            "ckanext.oauth2.profile_update_on_registration", False
+        ) and not oauth2helper.get_stored_token(user.name):
+            __set_incomplete_registration_session(user, provider)
+            return toolkit.redirect_to("oauth2.profile_update", user_id=user.id)
+
+        if (
+            toolkit.config.get("ckanext.oauth2.account_approval", False)
+            and user.state == "pending"
+        ):
+            __set_incomplete_registration_session(user, provider)
+            return toolkit.redirect_to("oauth2.user_pending", user_id=user.id)
+
+        __remove_incomplete_registration_session_if_exists()
+        return __login_and_redirect(oauth2helper, user, token)
+
     except Exception as e:
-        print("============================")
-        print(e)
         session.save()
-
-        # If the callback is called with an error, we must show the message
-        # error_description = toolkit.request.args.get("error_description", None)
-
-        # if not error_description:
-        #     if e.message:
-        #         error_description = e.message
-        #     elif hasattr(e, "description") and e.description:
-        #         error_description = e.description
-        #     elif hasattr(e, "error") and e.error:
-        #         error_description = e.error
-        #     else:
-        #         error_description = type(e).__name__
+        error_description = toolkit.request.args.get("error_description", None)
+        if not error_description:
+            for attr in ["message", "description", "error"]:
+                if hasattr(e, attr) and getattr(e, attr):
+                    error_description = getattr(e, attr)
+                    break
+            else:
+                error_description = type(e).__name__
 
         redirect_url = oauth2.get_came_from(toolkit.request.params.get("state"))
         redirect_url = "/" if redirect_url == constants.INITIAL_PAGE else redirect_url
-        # helpers.flash_error(error_description)
+        log.error("Error in OAuth2 callback: %s" % e)
+        helpers.flash_error(error_description)
         return toolkit.redirect_to(redirect_url)
+
+
+class UserProfileController(MethodView):
+    def _prepare(self):
+        context = {
+            "model": model,
+            "session": model.Session,
+            "ignore_auth": True,
+            "keep_email": True,
+        }
+        return context
+
+    def get(self, user_id):
+        context = self._prepare()
+        try:
+            if not toolkit.h.incomplete_registration(user_id):
+                raise
+            data_dict = {"id": user_id}
+            user = toolkit.get_action("user_show")(context, data_dict)
+            extra_vars = {
+                "data": user,
+                "errors": {},
+                "error_summary": {},
+                "hide_masterhead": True,
+            }
+            return toolkit.render("user/profie_update.html", extra_vars=extra_vars)
+        except Exception as e:
+            return toolkit.abort(404, "User not found")
+
+    def post(self, user_id):
+        context = self._prepare()
+        try:
+            if not toolkit.h.incomplete_registration(user_id):
+                raise
+            data_dict = dict(toolkit.request.form)
+            data_dict["id"] = user_id
+            include_fileds = [
+                "id",
+                "fullname",
+                "email",
+                "about",
+                "image_url",
+                "clear_upload",
+                "save",
+            ]
+            # filter out fields that are only item  in include_fileds
+            data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
+
+            return_dict = toolkit.get_action("user_update")(context, data_dict)
+
+            # Add user user token table, which means the user has completed profile update process
+            user_token = db.UserToken.by_user_name(user_name=return_dict.get("name"))
+            if not user_token:
+                user_token = db.UserToken()
+                user_token.user_name = return_dict.get("name")
+                model.Session.add(user_token)
+                model.Session.commit()
+
+            return toolkit.redirect_to("oauth2.user_pending", user_id=user_id)
+        except toolkit.ValidationError as e:
+            errors = e.error_dict
+            error_summary = e.error_summary
+            extra_vars = {
+                "data": data_dict,
+                "errors": errors,
+                "error_summary": error_summary,
+            }
+            return toolkit.render("user/profie_update.html", extra_vars=extra_vars)
+
 
 oauth2 = Blueprint("oauth2", __name__)
 
 
-def register_redirect():
-    register_url = toolkit.config.get("ckanext.oauth2.register_url", None)
-    return redirect(register_url)
+def user_pending(user_id):
+    try:
+        if not toolkit.h.incomplete_registration(user_id):
+            raise
+        user = toolkit.get_action("user_show")({"ignore_auth": True}, {"id": user_id})
+        return toolkit.render(
+            "user/account_pending.html",
+            extra_vars={"user": user, "hide_masterhead": True},
+        )
+    except Exception as e:
+        return toolkit.abort(404, "User not found")
 
 
-def reset_redirect():
-    reset_url = toolkit.config.get("ckanext.oauth2.reset_url", None)
-    return redirect(reset_url)
-
-
-def edit_redirect(user):
-    edit_url = toolkit.config.get("ckanext.oauth2.edit_url", None)
-    return redirect(edit_url.format(user=user))
-
-
-oauth2.add_url_rule("/oauth2/login/<provider>", "login", view_func=login, methods=["GET"])
-
-oauth2.add_url_rule("/oauth2/<provider>/callback", "callback", view_func=callback, methods=["GET"])
 oauth2.add_url_rule(
-    "/user/register", "redirect", view_func=register_redirect, methods=["GET"]
+    "/oauth2/login/<provider>", "login", view_func=login, methods=["GET"]
 )
+
 oauth2.add_url_rule(
-    "/user/reset", "redirect", view_func=register_redirect, methods=["GET"]
+    "/oauth2/<provider>/callback", "callback", view_func=callback, methods=["GET"]
 )
+
+
 oauth2.add_url_rule(
-    "/user/edit/<user>", "redirect", view_func=register_redirect, methods=["GET"]
+    "/user/edit/profile/<user_id>",
+    view_func=UserProfileController.as_view(str("profile_update")),
 )
+
+oauth2.add_url_rule("/user/account/<user_id>", view_func=user_pending, methods=["GET"])
 
 
 def get_blueprint():

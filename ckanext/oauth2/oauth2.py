@@ -81,7 +81,13 @@ class OAuth2Helper(object):
             self.authorization_endpoint = oauth_cofig["authorization_endpoint"]
             self.token_endpoint = oauth_cofig["token_endpoint"]
             self.profile_api_url = oauth_cofig["profile_api_url"]
-            self.profile_api_user_field = oauth_cofig["profile_api_user_field"]
+            self.profile_api_user_field = oauth_cofig.get("profile_api_user_field")
+            self.profile_api_first_name_field = oauth_cofig.get(
+                "profile_api_first_name_field"
+            )
+            self.profile_api_last_name_field = oauth_cofig.get(
+                "profile_api_last_name_field"
+            )
             self.profile_api_mail_field = oauth_cofig["profile_api_mail_field"]
             self.scope = "%s" % oauth_cofig["scope"]
             self.profile_api_fullname_field = oauth_cofig.get(
@@ -227,50 +233,60 @@ class OAuth2Helper(object):
         if self.profile_api_url.startswith("https://api.github.com"):
             email = [e["email"] for e in user_data if e["primary"] == True][0]
         else:
-            email = user_data[self.profile_api_mail_field]
-
-        user_name = email.rpartition("@")[0]
-
+            email = user_data.get(self.profile_api_mail_field)
+        profile_update_on_registration = toolkit.config.get(
+            "ckanext.oauth2.profile_update_on_registration", False
+        )
         # In CKAN can exists more than one user associated with the same email
         # Some providers, like Google and FIWARE only allows one account per email
         user = None
-        users = model.User.by_email(email)
+        if email:
+            existing_user = model.User.by_email(email)
+            if existing_user:
+                existing_user.state = (
+                    "active" if existing_user.state == "active" else existing_user.state
+                )
+                user = existing_user
+            else:
+                user = model.User()
+                user.email = email
+                name = email.partition("@")[0]
+                is_name_available = model.User.check_name_available(name)
+                user.state = "pending" if profile_update_on_registration else "active"
+                user.name = (
+                    name if is_name_available else name + "%s" % random.randint(10, 20)
+                )
+        else:
+            # if no email is provided, use the user_id or other unique field
+            user_id_or_name = user_data.get(self.profile_api_user_field)
+            existing_user = model.User.get(user_id_or_name)
+            if existing_user:
+                existing_user.state = (
+                    "active" if existing_user.state == "active" else existing_user.state
+                )
+                user = existing_user
+            else:
+                user = model.User()
+                user.email = None
+                user.state = "pending" if profile_update_on_registration else "active"
+                is_name_available = model.User.check_name_available(user_id_or_name)
+                user.name = user_id_or_name
 
-        if users:
-            user = users
-            user.state = "active"
+        def _set_fullname(user_data, fullname_field, first_name_field, last_name_field):
+            if fullname_field in user_data:
+                return user_data.get(fullname_field)
+            elif first_name_field in user_data and last_name_field in user_data:
+                return f"{user_data.get(first_name_field, '')} {user_data.get(last_name_field, '')}".strip()
+            return None
 
-        # If the user does not exist, we have to create it...
-        if not user:
-            user = model.User(email=email)
-            # if user name is already exists, add a random string to the end
-            is_username_availabe = model.User.check_name_available(user_name)
-            user.name = (
-                user_name
-                if is_username_availabe
-                else user_name + "%s" % random.randint(10, 20)
+        # Check and set if user have full name or first and last name
+        if not user.fullname:
+            fullname_field = self.profile_api_fullname_field
+            first_name_field = self.profile_api_first_name_field
+            last_name_field = self.profile_api_last_name_field
+            user.fullname = _set_fullname(
+                user_data, fullname_field, first_name_field, last_name_field
             )
-
-        # Now we update his/her user_name with the one provided by the OAuth2 service
-        # In the future, users will be obtained based on this field
-
-        # Update fullname
-        if (
-            self.profile_api_fullname_field != ""
-            and self.profile_api_fullname_field in user_data
-        ):
-            user.fullname = user_data[self.profile_api_fullname_field]
-
-        # Update sysadmin status
-        if (
-            self.profile_api_groupmembership_field != ""
-            and self.profile_api_groupmembership_field in user_data
-        ):
-            user.sysadmin = (
-                self.sysadmin_group_name
-                in user_data[self.profile_api_groupmembership_field]
-            )
-
         return user
 
     def login_user(self, user):
@@ -303,6 +319,7 @@ class OAuth2Helper(object):
                 "expires_in": user_token.expires_in,
                 "token_type": user_token.token_type,
             }
+        return None
 
     def update_token(self, user_name, token):
         user_token = db.UserToken.by_user_name(user_name=user_name)

@@ -5,8 +5,12 @@
 <h2> Login SSO: </h2> <hr>
 
 {% for provider in h.sso_login_options() %}
-    <a href="{{ h.url_for('oauth2.login', provider=provider) }}" class="btn btn-primary btn-block">
-        <i class="fa fa-{{ provider }}"></i> {{ _('Login with %(provider)s', provider=provider) }}
-    </a>
+    <div class="sso-container">
+        <a href="{{ h.url_for('oauth2.login', provider=provider) }}" class="btn btn-primary btn-block sso-item">
+            <i class="fa-brands fa-{{provider}}"></i>  
+            
+            {{ _('Login with %(provider)s', provider=provider | capitalize) }}
+        </a>
+    </div>
     {% endfor %}
 {% endblock %}
