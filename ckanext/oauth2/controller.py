@@ -165,6 +165,27 @@ class UserProfileController(MethodView):
         }
         return context
 
+    def _mail_admins(self):
+        extra_vars = {
+            "site_url": tk.config.get("ckan.site_url"),
+            "site_title": tk.config.get("ckan.site_title"),
+        }
+        subject = tk._("New user account registred on NIRD Platform; Review required")
+        body = tk.render("email/account_admin.txt", extra_vars=extra_vars)
+        try:
+            admins = model.Session.query(model.User).filter_by(sysadmin=True).all()
+            for admin in admins:
+                if admin.email:
+                    mail_user(
+                        recipient=admin,
+                        subject=subject,
+                        body="",
+                        body_html=body,
+                    )
+        except Exception as e:
+            log.error("Error sending email: %s", e)
+            tk.h.flash_error(tk._("Failed to send email to admin users"))
+
     def get(self, user_id):
         context = self._prepare()
         try:
@@ -214,6 +235,9 @@ class UserProfileController(MethodView):
             # Now remove the incomplete registration session also
             # as the user has completed the profile update process already
             _remove_incomplete_registration_session_if_exists()
+
+            if tk.config.get("ckanext.oauth2.notify_admins", False):
+                self._mail_admins()
 
             return tk.render(
                 "user/account_pending.html",
@@ -308,7 +332,7 @@ class AccountReview(MethodView):
             )
 
         tk.h.flash_success(
-            tk._("User account \"{}\" successfully  {}.").format(
+            tk._('User account "{}" successfully  {}.').format(
                 user.fullname or user.email,
                 "rejected" if action == "reject" else "Approved",
             )
@@ -316,7 +340,6 @@ class AccountReview(MethodView):
         return tk.redirect_to("oauth2.account_review")
 
 oauth2 = Blueprint("oauth2", __name__)
-
 
 oauth2.add_url_rule(
     "/oauth2/login/<provider>", "login", view_func=login, methods=["GET"]
@@ -330,7 +353,6 @@ oauth2.add_url_rule(
     "/user/edit/profile/<user_id>",
     view_func=UserProfileController.as_view(str("profile_update")),
 )
-
 
 oauth2.add_url_rule(
     "/admin/account_review", view_func=AccountReview.as_view("account_review")
