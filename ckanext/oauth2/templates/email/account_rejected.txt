@@ -1,0 +1,14 @@
+
+{% trans %}
+<p>Dear {{ user_name }},</p>
+
+<p>Your account on the NIRD Platform has been reviewed and rejected.</p>
+
+<p>Here is the review message from the administrator:</p>
+<p>{{ message }}</p>
+
+<p>For assistance, contact our support team.</p>
+
+--
+<p>Message sent by {{ site_title }} ({{ site_url }})</p>
+{% endtrans %}

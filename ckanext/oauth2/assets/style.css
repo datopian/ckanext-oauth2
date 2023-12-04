@@ -1,12 +1,12 @@
 .sso-container {
-    width: 300px;
+    width: 285px;
     margin: auto;
 }
-
 
 .sso-item {
     display: flex;
     align-items: center;
+    justify-content: center;
     position: relative;
     margin: 16px 0;
     padding: 16px 0;
@@ -25,8 +25,43 @@
 }
 
 .sso-item i {
-    margin-left: 20px;
-    margin-right: 40px;
+    /* margin-left: 20px; */
+    margin-right: 15px;
     font-size: 20px;
 }
 
+.account-review-action {
+    display: flex;
+    
+}
+.account-review-action form {
+    margin-right: 10px;
+}
+
+.dataTables_filter label {
+    display: flex;
+    align-items: center;
+    padding-bottom: 8px;
+}
+
+.dataTables_filter label:after {
+    content: "";
+}
+
+.review-user-table th {
+    background: #f5f5f5;
+    color: #212b32;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid #dee2e6;
+}  
+
+#review-user-table_paginate li {
+    margin-top: 10px;
+    padding: 0;
+}
+#review-user-table_paginate li:hover {
+    border: 1px solid #dee2e6;
+    
+}

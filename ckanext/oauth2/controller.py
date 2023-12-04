@@ -25,10 +25,12 @@ from flask.views import MethodView
 from flask import Blueprint, redirect
 from urllib.parse import urlparse
 import ckan.model as model
+from ckan.lib.mailer import mail_user
 
 from ckan.common import session
 import ckan.lib.helpers as helpers
-import ckan.plugins.toolkit as toolkit
+import ckan.plugins.toolkit as tk
+
 from ckanext.oauth2 import constants
 from ckanext.oauth2 import db
 
@@ -36,17 +38,17 @@ log = logging.getLogger(__name__)
 
 
 def _get_previous_page(default_page):
-    if "came_from" not in toolkit.request.params:
-        came_from_url = toolkit.request.headers.get("Referer", default_page)
+    if "came_from" not in tk.request.params:
+        came_from_url = tk.request.headers.get("Referer", default_page)
     else:
-        came_from_url = toolkit.request.params.get("came_from", default_page)
+        came_from_url = tk.request.params.get("came_from", default_page)
 
     came_from_url_parsed = urlparse(came_from_url)
 
     # Avoid redirecting users to external hosts
     if (
         came_from_url_parsed.netloc != ""
-        and came_from_url_parsed.netloc != toolkit.request.host
+        and came_from_url_parsed.netloc != tk.request.host
     ):
         came_from_url = default_page
 
@@ -71,7 +73,7 @@ def login(provider):
     oauth2helper = oauth2.OAuth2Helper(provider)
     came_from_url = _get_previous_page(constants.INITIAL_PAGE)
     auth_url = oauth2helper.challenge(came_from_url)
-    return toolkit.redirect_to(auth_url)
+    return tk.redirect_to(auth_url)
 
 
 def __set_incomplete_registration_session(user, provider):
@@ -81,12 +83,19 @@ def __set_incomplete_registration_session(user, provider):
     }
 
 
-def __remove_incomplete_registration_session_if_exists():
+def _check_incomplete_registration(user_id):
+    user = session.get("incomplete_registration", {}).get("id")
+    if user == user_id:
+        return True
+    return False
+
+
+def _remove_incomplete_registration_session_if_exists():
     if "incomplete_registration" in session:
         session.pop("incomplete_registration", None)
 
 
-def __login_and_redirect(oauth2helper, user, token):
+def _login_and_redirect(oauth2helper, user, token):
     oauth2helper.login_user(user)
     oauth2helper.update_token(user.name, token)
     return oauth2helper.redirect_from_callback()
@@ -101,25 +110,36 @@ def callback(provider):
         token = oauth2helper.get_token()
         user = oauth2helper.identify(token)
 
-        if toolkit.config.get(
+        if tk.config.get(
             "ckanext.oauth2.profile_update_on_registration", False
         ) and not oauth2helper.get_stored_token(user.name):
             __set_incomplete_registration_session(user, provider)
-            return toolkit.redirect_to("oauth2.profile_update", user_id=user.id)
+            return tk.redirect_to("oauth2.profile_update", user_id=user.id)
 
         if (
-            toolkit.config.get("ckanext.oauth2.account_approval", False)
+            tk.config.get("ckanext.oauth2.account_approval", False)
             and user.state == "pending"
         ):
-            __set_incomplete_registration_session(user, provider)
-            return toolkit.redirect_to("oauth2.user_pending", user_id=user.id)
+            return tk.render(
+                "user/account_pending.html",
+                extra_vars={"user": user, "hide_masterhead": True},
+            )
 
-        __remove_incomplete_registration_session_if_exists()
-        return __login_and_redirect(oauth2helper, user, token)
+        if (
+            tk.config.get("ckanext.oauth2.account_approval", False)
+            and user.state == "rejected"
+        ):
+            helpers.flash_error(
+                "Your account has been rejected. Please contact the administrator."
+            )
+            return tk.redirect_to("user.login")
+
+        _remove_incomplete_registration_session_if_exists()
+        return _login_and_redirect(oauth2helper, user, token)
 
     except Exception as e:
         session.save()
-        error_description = toolkit.request.args.get("error_description", None)
+        error_description = tk.request.args.get("error_description", None)
         if not error_description:
             for attr in ["message", "description", "error"]:
                 if hasattr(e, attr) and getattr(e, attr):
@@ -128,11 +148,11 @@ def callback(provider):
             else:
                 error_description = type(e).__name__
 
-        redirect_url = oauth2.get_came_from(toolkit.request.params.get("state"))
+        redirect_url = oauth2.get_came_from(tk.request.params.get("state"))
         redirect_url = "/" if redirect_url == constants.INITIAL_PAGE else redirect_url
         log.error("Error in OAuth2 callback: %s" % e)
         helpers.flash_error(error_description)
-        return toolkit.redirect_to(redirect_url)
+        return tk.redirect_to(redirect_url)
 
 
 class UserProfileController(MethodView):
@@ -148,26 +168,26 @@ class UserProfileController(MethodView):
     def get(self, user_id):
         context = self._prepare()
         try:
-            if not toolkit.h.incomplete_registration(user_id):
+            if not _check_incomplete_registration(user_id):
                 raise
             data_dict = {"id": user_id}
-            user = toolkit.get_action("user_show")(context, data_dict)
+            user = tk.get_action("user_show")(context, data_dict)
             extra_vars = {
                 "data": user,
                 "errors": {},
                 "error_summary": {},
                 "hide_masterhead": True,
             }
-            return toolkit.render("user/profie_update.html", extra_vars=extra_vars)
+            return tk.render("user/profie_update.html", extra_vars=extra_vars)
         except Exception as e:
-            return toolkit.abort(404, "User not found")
+            return tk.abort(404, "User not found")
 
     def post(self, user_id):
         context = self._prepare()
         try:
-            if not toolkit.h.incomplete_registration(user_id):
+            if not _check_incomplete_registration(user_id):
                 raise
-            data_dict = dict(toolkit.request.form)
+            data_dict = dict(tk.request.form)
             data_dict["id"] = user_id
             include_fileds = [
                 "id",
@@ -181,7 +201,7 @@ class UserProfileController(MethodView):
             # filter out fields that are only item  in include_fileds
             data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
 
-            return_dict = toolkit.get_action("user_update")(context, data_dict)
+            return_dict = tk.get_action("user_update")(context, data_dict)
 
             # Add user user token table, which means the user has completed profile update process
             user_token = db.UserToken.by_user_name(user_name=return_dict.get("name"))
@@ -191,8 +211,16 @@ class UserProfileController(MethodView):
                 model.Session.add(user_token)
                 model.Session.commit()
 
-            return toolkit.redirect_to("oauth2.user_pending", user_id=user_id)
-        except toolkit.ValidationError as e:
+            # Now remove the incomplete registration session also
+            # as the user has completed the profile update process already
+            _remove_incomplete_registration_session_if_exists()
+
+            return tk.render(
+                "user/account_pending.html",
+                extra_vars={"user": return_dict, "hide_masterhead": True},
+            )
+
+        except tk.ValidationError as e:
             errors = e.error_dict
             error_summary = e.error_summary
             extra_vars = {
@@ -200,23 +228,94 @@ class UserProfileController(MethodView):
                 "errors": errors,
                 "error_summary": error_summary,
             }
-            return toolkit.render("user/profie_update.html", extra_vars=extra_vars)
+            return tk.render("user/profie_update.html", extra_vars=extra_vars)
 
+
+class AccountReview(MethodView):
+    def __prepare(self):
+        context = {"model": model, "session": model.Session, "user": tk.c.user}
+        try:
+            tk.check_access("sysadmin", context)
+        except tk.NotAuthorized:
+            tk.abort(401, tk._("Unauthorized to visit this page"))
+        return context
+
+    def __mail_user(self, user, type, message=None):
+        extra_vars = {
+            "site_url": tk.config.get("ckan.site_url"),
+            "site_title": tk.config.get("ckan.site_title"),
+            "user_name": user.fullname if user.fullname else user.name,
+            "message": message,
+        }
+        if type == "reject":
+            subject = tk._("NIRD Platform Account is reviewed and rejected")
+            body = tk.render("email/account_rejected.txt", extra_vars=extra_vars)
+        elif type == "approve":
+            subject = tk._(
+                "Congratulations🎉! NIRD Platform Account is reviewed and approved"
+            )
+            body = tk.render("email/account_approved.txt", extra_vars=extra_vars)
+        try:
+            if user.email:
+                mail_user(
+                    recipient=user,
+                    subject=subject,
+                    body="",
+                    body_html=body,
+                )
+        except Exception as e:
+            log.error("Error sending email: %s", e)
+            tk.h.flash_error(tk._("Failed to send email to user"))
+
+    def get(self):
+        context = self.__prepare()
+        users = (
+            model.Session.query(model.User)
+            .filter_by(state="pending")
+            .order_by(model.User.created)
+            .all()
+        )
+        extra_vars = {
+            "users": users,
+            "pending_count": len(users),
+            "pending_count_plural": len(users) > 1,
+        }
+
+        return tk.render("admin/account_review.html", extra_vars=extra_vars)
+
+    def post(self):
+        context = self.__prepare()
+        user_id = tk.request.form.get("id")
+        action = tk.request.form.get("action")
+        message = tk.request.form.get("message")
+        user = model.User.get(user_id)
+        if not user:
+            tk.abort(404, tk._("User not found"))
+
+        if action == "approve":
+            user.state = "active"
+            self.__mail_user(user, type="approve")
+
+            tk.get_action("user_update")(
+                context, {"id": user_id, "state": "active", "email": user.email}
+            )
+        elif action == "reject":
+            user.state = "rejected"
+            self.__mail_user(user, type="reject", message=message)
+
+            tk.get_action("user_update")(
+                context, {"id": user_id, "state": "rejected", "email": user.email}
+            )
+
+        tk.h.flash_success(
+            tk._("User account \"{}\" successfully  {}.").format(
+                user.fullname or user.email,
+                "rejected" if action == "reject" else "Approved",
+            )
+        )
+        return tk.redirect_to("oauth2.account_review")
 
 oauth2 = Blueprint("oauth2", __name__)
-
-
-def user_pending(user_id):
-    try:
-        if not toolkit.h.incomplete_registration(user_id):
-            raise
-        user = toolkit.get_action("user_show")({"ignore_auth": True}, {"id": user_id})
-        return toolkit.render(
-            "user/account_pending.html",
-            extra_vars={"user": user, "hide_masterhead": True},
-        )
-    except Exception as e:
-        return toolkit.abort(404, "User not found")
 
 
 oauth2.add_url_rule(
@@ -227,13 +326,15 @@ oauth2.add_url_rule(
     "/oauth2/<provider>/callback", "callback", view_func=callback, methods=["GET"]
 )
 
-
 oauth2.add_url_rule(
     "/user/edit/profile/<user_id>",
     view_func=UserProfileController.as_view(str("profile_update")),
 )
 
-oauth2.add_url_rule("/user/account/<user_id>", view_func=user_pending, methods=["GET"])
+
+oauth2.add_url_rule(
+    "/admin/account_review", view_func=AccountReview.as_view("account_review")
+)
 
 
 def get_blueprint():

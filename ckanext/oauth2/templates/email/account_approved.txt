@@ -1,0 +1,11 @@
+
+{% trans %}
+<p>Dear {{ user_name }},</p>
+<p>Your account on the NIRD Platform has been reviewed and approved. </p>
+<p>Your account is now active, and you can begin exploring the platform's features by logging in <a href="{{ site_url }}">here</a>  .</p>
+
+<p>For assistance, contact our support team.</p>
+
+--
+<p>Message sent by {{ site_title }} ({{ site_url }})</p>
+{% endtrans %}

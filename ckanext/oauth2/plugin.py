@@ -36,6 +36,7 @@ from ckanext.oauth2 import controller
 
 log = logging.getLogger(__name__)
 
+
 def _get_sso_options():
     yaml_file = toolkit.config.get(
         "ckan.oauth2.config_path",
@@ -57,13 +58,6 @@ def _user_is_sso_user():
     return False
 
 
-def _incomplete_registration(user_id):
-    user = session.get("incomplete_registration", {}).get("id")
-    if user == user_id:
-        return True
-    return False
-
-
 class OAuth2Plugin(plugins.SingletonPlugin):
     plugins.implements(plugins.ITemplateHelpers)
     plugins.implements(plugins.IAuthenticator, inherit=True)
@@ -74,11 +68,9 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         log.debug("Initializing the OAuth2 plugin")
         db.init_db(model)
 
-    
     # ITemplateHelpers
     def get_helpers(self):
         return {
-            "incomplete_registration": _incomplete_registration,
             "sso_login_options": _get_sso_options,
             "user_is_sso_user": _user_is_sso_user,
         }
@@ -139,14 +131,12 @@ class OAuth2Plugin(plugins.SingletonPlugin):
             g.user = None
             log.warn("The user is currently not logged in.")
 
-                # ICongfigurer
-
+    # ICongfigurer
     def update_config(self, config):
         # Update our configuration
         toolkit.add_template_directory(config, "templates")
         toolkit.add_public_directory(config, "public")
         toolkit.add_resource("assets", "oauth2")
-        
         self.register_url = os.environ.get(
             "CKAN_OAUTH2_REGISTER_URL", config.get("ckan.oauth2.register_url", None)
         )
@@ -160,4 +150,3 @@ class OAuth2Plugin(plugins.SingletonPlugin):
             "CKAN_OAUTH2_AUTHORIZATION_HEADER",
             config.get("ckan.oauth2.authorization_header", "Authorization"),
         ).lower()
-

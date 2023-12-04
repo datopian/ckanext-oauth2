@@ -3,5 +3,12 @@ oauth2-css:
   output: ckanext-oauth2/%(version)s-oauth2.css
   contents:
     - style.css
+    - datatables.min.css
 
-    
+oauth2-js:
+  filters: rjsmin
+  output: ckanext-oauth2/%(version)s-oauth2.js
+  contents:
+    - datatables.min.js
+    - script.js
+  

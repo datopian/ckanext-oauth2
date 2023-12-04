@@ -23,10 +23,10 @@
 
       {{ form.input('email', label=_('Email'), id='field-email', type='email', value=data.email, error=errors.email,
       placeholder=_('eg. joe@example.com'), classes=['control-medium'], attrs={'readonly': '',
-      'class': 'form-control'} ) }}
+      'class': 'form-control'}, is_required=true ) }}
       {% else %}
       {{ form.input('email', label=_('Email'), id='field-email', type='email', value=data.email, error=errors.email,
-      placeholder=_('eg. joe@example.com'), classes=['control-medium']) }}
+      placeholder=_('eg. joe@example.com'), classes=['control-medium'], is_required=true) }}
       {% endif %}
 
 
