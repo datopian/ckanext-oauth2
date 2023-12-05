@@ -4,13 +4,14 @@
 }
 
 .sso-item {
-    display: flex;
+    display: flex !important;
     align-items: center;
+    align-content: center !important;
     justify-content: center;
     position: relative;
     margin: 16px 0;
     padding: 16px 0;
-    background: #fff;
+    background: #fff !important;
     color: #212b32!important;
     border: 1px solid #d8dde0;
     box-shadow: 0 4px 0 #d8dde0;
