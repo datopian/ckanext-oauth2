@@ -6,10 +6,10 @@
 
 {% for provider in h.sso_login_options() %}
     <div class="sso-container">
-        <a href="{{ h.url_for('oauth2.login', provider=provider) }}" class="btn btn-primary btn-block sso-item">
+        <a href="{{ h.url_for('oauth2.login', provider=provider | lower) }}" class="btn btn-primary btn-block sso-item">
             <i class="fa-brands fa-{{provider}}"></i>  
             
-            {{ _('Login with %(provider)s', provider=provider | capitalize) }}
+            {{ _('Login with %(provider)s', provider=provider) }}
         </a>
     </div>
     {% endfor %}

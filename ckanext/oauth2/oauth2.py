@@ -74,7 +74,7 @@ class OAuth2Helper(object):
         with open(yaml_file) as f:
             oauth_cofig = yaml.load(f, Loader=yaml.FullLoader)
             oauth_cofig = list(
-                filter(lambda x: x["name"] == self.provider, oauth_cofig["providers"])
+                filter(lambda x: x["name"].lower() == self.provider.lower(), oauth_cofig["providers"])
             )[0]
             self.client_id = oauth_cofig["client_id"]
             self.client_secret = oauth_cofig["client_secret"]
