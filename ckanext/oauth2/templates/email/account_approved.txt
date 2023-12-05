@@ -1,11 +1,9 @@
 
 {% trans %}
 <p>Dear {{ user_name }},</p>
-<p>Your account on the NIRD Platform has been reviewed and approved. </p>
-<p>Your account is now active, and you can begin exploring the platform's features by logging in <a href="{{ site_url }}">here</a>  .</p>
 
-<p>For assistance, contact our support team.</p>
+<p>Your request to register with the archive has been approved. To access the archive please go to: <a href="{{ site_url }}/user/login">{{ site_url }}/user/login</a> to log into the archive. 
+You can deposit a new dataset by following the <a href="{{ site_url }}/dataset/new">{{ site_url }}/dataset/new</a> and you can search for datasets using the <a href="{{ site_url }}/dataset">{{ site_url }}/dataset</a>. More information can be found in the user guide </p>
 
---
-<p>Message sent by {{ site_title }} ({{ site_url }})</p>
+<p>{{ signature }}</p>
 {% endtrans %}

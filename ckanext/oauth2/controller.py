@@ -21,6 +21,8 @@
 from __future__ import unicode_literals
 
 import logging
+import threading
+
 from flask.views import MethodView
 from flask import Blueprint, redirect
 from urllib.parse import urlparse
@@ -130,7 +132,7 @@ def callback(provider):
             and user.state == "rejected"
         ):
             helpers.flash_error(
-                "Your account has been rejected. Please contact the administrator."
+                "Your account is reviewed and rejected. If you have any questions about your account, please contact the site administrator"
             )
             return tk.redirect_to("user.login")
 
@@ -165,17 +167,25 @@ class UserProfileController(MethodView):
         }
         return context
 
-    def _mail_admins(self):
-        extra_vars = {
-            "site_url": tk.config.get("ckan.site_url"),
-            "site_title": tk.config.get("ckan.site_title"),
-        }
-        subject = tk._("New user account registred on NIRD Platform; Review required")
-        body = tk.render("email/account_admin.txt", extra_vars=extra_vars)
+    def _mail_admins(self, user):
+        account_user = user.get("fullname", user.get("name"))
+        site_url = tk.config.get("ckan.site_url")
+        organization = ""  # Not implemented yet
+        archive_email = tk.h.archive_manager_email()
+
+        subject = tk._("NIRD ARCHIVE: user access request")
+
         try:
             admins = model.Session.query(model.User).filter_by(sysadmin=True).all()
             for admin in admins:
                 if admin.email:
+                    body = f"""
+                        <p>Dear {admin.fullname or admin.email},</p>
+                        <p>The user: {account_user} from {organization}  has submitted a request to use the archive. You can contact this user at <a href="mailto:{archive_email}">{archive_email}</a> 
+                        for more details if required.</p> To approve or decline this request please go to <a href="{site_url}admin/account_review">{site_url}/admin/account_review</a>. 
+                        <p>{archive_email}</p>
+                    """
+                    print
                     mail_user(
                         recipient=admin,
                         subject=subject,
@@ -222,13 +232,13 @@ class UserProfileController(MethodView):
             # filter out fields that are only item  in include_fileds
             data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
 
-            return_dict = tk.get_action("user_update")(context, data_dict)
+            user_dict = tk.get_action("user_update")(context, data_dict)
 
             # Add user user token table, which means the user has completed profile update process
-            user_token = db.UserToken.by_user_name(user_name=return_dict.get("name"))
+            user_token = db.UserToken.by_user_name(user_name=user_dict.get("name"))
             if not user_token:
                 user_token = db.UserToken()
-                user_token.user_name = return_dict.get("name")
+                user_token.user_name = user_dict.get("name")
                 model.Session.add(user_token)
                 model.Session.commit()
 
@@ -236,12 +246,12 @@ class UserProfileController(MethodView):
             # as the user has completed the profile update process already
             _remove_incomplete_registration_session_if_exists()
 
-            if tk.config.get("ckanext.oauth2.notify_admins", False):
-                self._mail_admins()
+            thread = threading.Thread(target=self._mail_admins, args=(user_dict,))
+            thread.start()
 
             return tk.render(
                 "user/account_pending.html",
-                extra_vars={"user": return_dict, "hide_masterhead": True},
+                extra_vars={"user": user_dict, "hide_masterhead": True},
             )
 
         except tk.ValidationError as e:
@@ -264,20 +274,19 @@ class AccountReview(MethodView):
             tk.abort(401, tk._("Unauthorized to visit this page"))
         return context
 
-    def __mail_user(self, user, type, message=None):
+    def _mail_user(self, user, type, message=None):
         extra_vars = {
             "site_url": tk.config.get("ckan.site_url"),
             "site_title": tk.config.get("ckan.site_title"),
             "user_name": user.fullname if user.fullname else user.name,
+            "signature": tk.h.archive_manager_email(),
             "message": message,
         }
         if type == "reject":
-            subject = tk._("NIRD Platform Account is reviewed and rejected")
+            subject = tk._("NIRD ARCHIVE: Declined to use the archive")
             body = tk.render("email/account_rejected.txt", extra_vars=extra_vars)
         elif type == "approve":
-            subject = tk._(
-                "Congratulations🎉! NIRD Platform Account is reviewed and approved"
-            )
+            subject = tk._("NIRD ARCHIVE: Approved to use the archive")
             body = tk.render("email/account_approved.txt", extra_vars=extra_vars)
         try:
             if user.email:
@@ -318,14 +327,14 @@ class AccountReview(MethodView):
 
         if action == "approve":
             user.state = "active"
-            self.__mail_user(user, type="approve")
+            self._mail_user(user, type="approve")
 
             tk.get_action("user_update")(
                 context, {"id": user_id, "state": "active", "email": user.email}
             )
         elif action == "reject":
             user.state = "rejected"
-            self.__mail_user(user, type="reject", message=message)
+            self._mail_user(user, type="reject", message=message)
 
             tk.get_action("user_update")(
                 context, {"id": user_id, "state": "rejected", "email": user.email}
@@ -338,6 +347,7 @@ class AccountReview(MethodView):
             )
         )
         return tk.redirect_to("oauth2.account_review")
+
 
 oauth2 = Blueprint("oauth2", __name__)
 

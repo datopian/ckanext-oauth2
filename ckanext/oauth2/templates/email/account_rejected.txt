@@ -2,13 +2,12 @@
 {% trans %}
 <p>Dear {{ user_name }},</p>
 
-<p>Your account on the NIRD Platform has been reviewed and rejected.</p>
+<p>Your request to register with the archive has been declined. The request has been evaluated according to the NIRD Research Data Archive’s mandate, and the archive must decline your request at this point.</p>
 
-<p>Here is the review message from the administrator:</p>
-<p>{{ message }}</p>
+<strong>Message administrator:</strong>
+<blockquote style="background-color: #f2f2f2; padding: 4px; border-left: 4px solid #bc9191;">
+    <p>{{ message }}</p>
+</blockquote>
 
-<p>For assistance, contact our support team.</p>
-
---
-<p>Message sent by {{ site_title }} ({{ site_url }})</p>
+{{ signature }}
 {% endtrans %}

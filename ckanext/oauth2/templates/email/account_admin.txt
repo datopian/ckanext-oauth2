@@ -1,9 +1,0 @@
-{% trans %}
-<p>Dear {{ user_name }},</p>
-
-<p>A new user has registered on the NIRD platform. Please review their account and approve if everything is in order. </p> 
-<p>You can review the account by clicking <a href="{{ site_url }}/admin/account_review">here</a>./p>
-
---
-<p>Message sent by {{ site_title }} ({{ site_url }})</p>
-{% endtrans %}
