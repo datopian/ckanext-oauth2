@@ -2,20 +2,26 @@
 
 
 {% block primary_content_inner %}
-<table id="review-user-table"  class="table review-user-table table-striped table-bordered" data-module="review-user-table">
+<table id="review-user-table" class="table review-user-table table-striped table-bordered"
+    data-module="review-user-table">
     <thead>
         <tr>
             <th>{{ _('User') }}</th>
             <th>{{ _('Registration date') }}</th>
+            <th class="hidden">{{ _('State') }}</th>
             <th>&nbsp;</th>
         </tr>
     </thead>
     <tbody>
         {% for user in users %}
         <tr>
-            <td>{{user.fullname or user.name}} ({{user.email}}) </td>
+            <td style="display: flex; justify-content: space-between;">
+                <a href="/user/{{ user.name }}">{{ user.fullname or user.email }}</a>
+            </td>
             <td>{{user.created.isoformat()}}</td>
+            <td class="hidden">{{user.state}}</td>
             <td>
+                {% if user.state in ['pending'] %}
                 <div class="account-review-action">
                     <form method="POST">
                         <input type="hidden" value="{{ user.id }}" name="id" />
@@ -29,6 +35,7 @@
                         data-bs-target="#reject-modal">
                         {{ _('Reject') }}
                     </button>
+
 
                     <div class="modal" id="reject-modal">
                         <div class="modal-dialog">
@@ -63,8 +70,7 @@
 
                     </div>
                 </div>
-                </div>
-                </div>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
@@ -80,7 +86,7 @@
     </h2>
     <div class="module-content">
         {% trans %}
-        <p>You can find all the accounts that have been pending for review </p> 
+        <p>You can find all the accounts that have been pending for review </p>
         <p>When you approve or reject an account, the user will be notified by email.</p>
         {% endtrans %}
     </div>

@@ -1,3 +1,7 @@
+.hidden {
+    display: none;
+}
+
 .sso-container {
     width: 285px;
     margin: auto;
@@ -23,6 +27,17 @@
     border: 1px solid #dee2e6 ;
     box-shadow: 0 4px 0 #dee2e6 ;
     border-radius: 3px;
+}
+.badge-danger {
+    background-color: #dc3545;
+}
+
+.badge-success {
+    background-color: #28a745;
+}
+
+.badge-warning {
+    background-color: #ffc107;
 }
 
 .sso-item i {

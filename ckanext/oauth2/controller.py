@@ -23,12 +23,15 @@ from __future__ import unicode_literals
 import logging
 import threading
 
+
 from flask.views import MethodView
 from flask import Blueprint, redirect
 from urllib.parse import urlparse
 import ckan.model as model
 from ckan.lib.mailer import mail_user
-
+from ckan.views.user import EditView
+import ckan.logic as logic
+import ckan.lib.navl.dictization_functions as dictization_functions
 from ckan.common import session
 import ckan.lib.helpers as helpers
 import ckan.plugins.toolkit as tk
@@ -185,7 +188,6 @@ class UserProfileController(MethodView):
                         for more details if required.</p> To approve or decline this request please go to <a href="{site_url}admin/account_review">{site_url}/admin/account_review</a>. 
                         <p>{archive_email}</p>
                     """
-                    print
                     mail_user(
                         recipient=admin,
                         subject=subject,
@@ -304,7 +306,7 @@ class AccountReview(MethodView):
         context = self.__prepare()
         users = (
             model.Session.query(model.User)
-            .filter_by(state="pending")
+            .filter(model.User.state.in_(["pending", "rejected", "active"]))
             .order_by(model.User.created)
             .all()
         )
@@ -313,7 +315,6 @@ class AccountReview(MethodView):
             "pending_count": len(users),
             "pending_count_plural": len(users) > 1,
         }
-
         return tk.render("admin/account_review.html", extra_vars=extra_vars)
 
     def post(self):
@@ -349,6 +350,86 @@ class AccountReview(MethodView):
         return tk.redirect_to("oauth2.account_review")
 
 
+class UserEditView(EditView):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def post(self, id):
+        # This needed to be overrided as sysadmin cannot 
+        # edit user without providing password
+        context, id = self._prepare(id)
+        if tk.c.userobj.sysadmin:
+            if not context["save"]:
+                return self.get(id)
+
+            try:
+                data_dict = logic.clean_dict(
+                    dictization_functions.unflatten(
+                        logic.tuplize_dict(logic.parse_params(tk.request.form))
+                    )
+                )
+                data_dict.update(
+                    logic.clean_dict(
+                        dictization_functions.unflatten(
+                            logic.tuplize_dict(logic.parse_params(tk.request.files))
+                        )
+                    )
+                )
+
+            except dictization_functions.DataError:
+                tk.abort(400, tk._("Integrity Error"))
+            data_dict.setdefault("activity_streams_email_notifications", False)
+
+            data_dict["id"] = id
+            # deleted user can be reactivated by sysadmin on WEB-UI
+            is_deleted = False
+            if tk.asbool(data_dict.get("activate_user", False)):
+                user_dict = logic.get_action("user_show")(context, {"id": id})
+                # set the flag so if validation error happens we will
+                # change back the user state to deleted
+                is_deleted = user_dict.get("state") == "deleted"
+                # if activate_user is checked, change the user's state to active
+                data_dict["state"] = "active"
+                # pop the value as we don't want to send it for
+                # validation on user_update
+                data_dict.pop("activate_user")
+            # we need this comparison when sysadmin edits a user,
+            # this will return True
+            # and we can utilize it for later use.
+
+            # common users can edit their own profiles without providing
+            # password, but if they want to change
+            # their old password with new one... old password must be provided..
+            # so we are checking here if password1
+            # and password2 are filled so we can enter the validation process.
+            # when sysadmins edits a user he MUST provide sysadmin password.
+            # We are recognizing sysadmin user
+            # by email_changed variable.. this returns True
+            # and we are entering the validation.
+            
+            try:
+                user = logic.get_action(u'user_update')(context, data_dict)
+            except tk.NotAuthorized:
+                tk.abort(403, tk._(u'Unauthorized to edit user %s') % id)
+            except tk.ObjectNotFound:
+                tk.abort(404, tk._(u'User not found'))
+            except tk.ValidationError as e:
+                errors = e.error_dict
+                error_summary = e.error_summary
+                # the user state was deleted, we are trying to reactivate it but
+                # validation error happens so we want to change back the state
+                # to deleted, as it was before
+                if is_deleted and data_dict.get('state') == 'active':
+                    data_dict['state'] = 'deleted'
+                return self.get(id, data_dict, errors, error_summary)
+            
+            tk.h.flash_success(tk._(u'Profile updated'))
+            resp = tk.h.redirect_to(u'user.read', id=user[u'name'])
+            return resp
+        else:
+            return super().post(id)
+        
+
 oauth2 = Blueprint("oauth2", __name__)
 
 oauth2.add_url_rule(
@@ -367,6 +448,13 @@ oauth2.add_url_rule(
 oauth2.add_url_rule(
     "/admin/account_review", view_func=AccountReview.as_view("account_review")
 )
+
+
+_edit_view = UserEditView.as_view(str("edit"))
+
+
+oauth2.add_url_rule("/user/edit", view_func=_edit_view)
+oauth2.add_url_rule("/user/edit/<id>", view_func=_edit_view)
 
 
 def get_blueprint():

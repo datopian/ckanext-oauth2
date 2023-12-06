@@ -31,11 +31,10 @@ this.ckan.module('review-user-table', function ($) {
       });
 
       var table = this.el.DataTable({
-
         initComplete: function () {
         },
         lengthChange: false,
-        pageLength: 10,
+        pageLength: 20,
         language: {
           paginate: {
             next: '»',
@@ -44,10 +43,17 @@ this.ckan.module('review-user-table', function ($) {
         },
         columnDefs: [{
             targets: 0, // The index of the user column
-            width: "35%",
+            width: "45%",
             render: function (data, type, row, meta) {
-              // Format the user name as a link
-              return data
+              if (row[2] === 'pending') {
+                return `${data}&nbsp;<span class="badge badge-warning">${row[2]}</span>`;
+              } else if (row[2] === 'approved') {
+                return `${data}&nbsp;<span class="badge badge-success">${row[2]}</span>`;
+              } else if (row[2] === 'rejected') {
+                return `${data}&nbsp;<span class="badge badge-danger">${row[2]}</span>`;
+              } else {
+                return `${data}&nbsp;<span class="badge badge-success">${row[2]}</span>`;
+              }
             }
           },
           {
@@ -68,12 +74,9 @@ this.ckan.module('review-user-table', function ($) {
 
         ]
       });
-
       // Add a header with the total number of users and subscribed members
       var totalUsers = table.rows().count();
       table.column(0).header().textContent = 'User (' + totalUsers + ')';
-
-
     }
   };
 });

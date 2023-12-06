@@ -10,6 +10,8 @@
         <legend>{{ _('Change details') }}</legend>
         {% if not h.user_is_sso_user() %}
         {{ form.input('name', label=_('Username'), id='field-username', value=data.name, error=errors.name, classes=['control-medium'], attrs={'readonly': '', 'class': 'form-control'}) }}
+        {% else %}
+        {{ form.input('name', label=_('Username'), id='field-username', value=data.name, error=errors.name, classes=['control-medium'], attrs={'class': 'form-control hidden'}) }}
         {% endif %}
         {{ form.input('fullname', label=_('Full name'), id='field-fullname', value=data.fullname, error=errors.fullname, placeholder=_('eg. Joe Bloggs'), classes=['control-medium']) }}
 
@@ -35,7 +37,11 @@
 
     {% if is_sysadmin and current_user.name != data.name %}
     {% block sysadmin_password %}
+    {% if h.user_is_sso_user() %}
+      <fieldset class="hidden">
+    {% else %}
       <fieldset>
+    {% endif %}
       <legend>{{ _('Change ' + data.name|capitalize + "'s" + ' password') }}</legend>
       {{ form.input('password1', type='password', label=_('Password'), id='field-password', value=data.password1, error=errors.password1, classes=['control-medium'], attrs={'autocomplete': 'off', 'class': 'form-control'} ) }}
       {{ form.input('password2', type='password', label=_('Confirm Password'), id='field-password-confirm', value=data.password2, error=errors.password2, classes=['control-medium'], attrs={'autocomplete': 'off', 'class': 'form-control'}) }}
@@ -43,7 +49,11 @@
     {% endblock %}
 
     {% block sysadmin_old_password %}
+    {% if h.user_is_sso_user() %}
+      <fieldset class="hidden">
+    {% else %}
       <fieldset>
+    {% endif %}
         <legend>{{ _('Sysadmin password') }}</legend>
         {{ form.input('old_password',
                       type='password',
@@ -61,9 +71,11 @@
     {% else %}
 
     {% block change_password %}
-    {% if not h.user_is_sso_user() %}
-
+    {% if h.user_is_sso_user() %}
+      <fieldset class="hidden">
+    {% else %}
       <fieldset>
+    {% endif %}
         <legend>{{ _('Change password') }}</legend>
         {{ form.input('old_password',
                       type='password',
@@ -79,7 +91,6 @@
 
         {{ form.input('password2', type='password', label=_('Confirm Password'), id='field-password-confirm', value=data.password2, error=errors.password2, classes=['control-medium'], attrs={'autocomplete': 'off', 'class': 'form-control'}) }}
       </fieldset>
-      {% endif %}
 
     {% endblock %}
 

@@ -1,9 +1,6 @@
 {% ckan_extends %}
 
 {% block form %}
-{{ super() }}
-<h2> Login SSO: </h2> <hr>
-
 {% for provider in h.sso_login_options() %}
     <div class="sso-container">
         <a href="{{ h.url_for('oauth2.login', provider=provider | lower) }}" class="btn btn-primary btn-block sso-item">
@@ -14,3 +11,5 @@
     </div>
     {% endfor %}
 {% endblock %}
+
+
