@@ -355,7 +355,7 @@ class UserEditView(EditView):
         super().__init__()
 
     def post(self, id):
-        # This needed to be overrided as sysadmin cannot 
+        # This needed to be overrided as sysadmin cannot
         # edit user without providing password
         context, id = self._prepare(id)
         if tk.c.userobj.sysadmin:
@@ -406,29 +406,33 @@ class UserEditView(EditView):
             # We are recognizing sysadmin user
             # by email_changed variable.. this returns True
             # and we are entering the validation.
-            
+
             try:
-                user = logic.get_action(u'user_update')(context, data_dict)
+                user = logic.get_action("user_update")(context, data_dict)
             except tk.NotAuthorized:
-                tk.abort(403, tk._(u'Unauthorized to edit user %s') % id)
+                tk.abort(403, tk._("Unauthorized to edit user %s") % id)
             except tk.ObjectNotFound:
-                tk.abort(404, tk._(u'User not found'))
+                tk.abort(404, tk._("User not found"))
             except tk.ValidationError as e:
                 errors = e.error_dict
                 error_summary = e.error_summary
                 # the user state was deleted, we are trying to reactivate it but
                 # validation error happens so we want to change back the state
                 # to deleted, as it was before
-                if is_deleted and data_dict.get('state') == 'active':
-                    data_dict['state'] = 'deleted'
+                if is_deleted and data_dict.get("state") == "active":
+                    data_dict["state"] = "deleted"
                 return self.get(id, data_dict, errors, error_summary)
-            
-            tk.h.flash_success(tk._(u'Profile updated'))
-            resp = tk.h.redirect_to(u'user.read', id=user[u'name'])
+
+            tk.h.flash_success(tk._("Profile updated"))
+            resp = tk.h.redirect_to("user.read", id=user["name"])
             return resp
         else:
             return super().post(id)
-        
+
+
+def _reset_redirect():
+    return tk.abort(404, tk._("Not found"))
+
 
 oauth2 = Blueprint("oauth2", __name__)
 
@@ -455,6 +459,7 @@ _edit_view = UserEditView.as_view(str("edit"))
 
 oauth2.add_url_rule("/user/edit", view_func=_edit_view)
 oauth2.add_url_rule("/user/edit/<id>", view_func=_edit_view)
+oauth2.add_url_rule("/user/reset", view_func=_reset_redirect)
 
 
 def get_blueprint():
