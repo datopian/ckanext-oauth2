@@ -42,11 +42,6 @@
     border-top: 1px solid #d8dde0;
 }
 
-// Define custom fab icon with svg
-.mdc-fab-icon {
-    background-img: url(
-}
-/Users/sagarg/Documents/datopain/sigma2/ckanext/ckanext-oauth2/ckanext/public/icons/dataporten.svg
 
 .badge-danger {
     background-color: #dc3545;
