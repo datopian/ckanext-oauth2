@@ -14,6 +14,8 @@
 
 .sso-item {
     margin-bottom: 8px;
+    display: flex;
+    justify-content: center;
 }
 
 .sso-heading {
@@ -55,8 +57,7 @@
     background-color: #ffc107;
 }
 
-.sso-item i {
-    /* margin-left: 20px; */
+.sso-item i, .sso-item svg {
     margin-right: 15px;
     font-size: 20px;
 }
