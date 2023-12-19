@@ -185,7 +185,7 @@ class UserProfileController(MethodView):
                     body = f"""
                         <p>Dear {admin.fullname or admin.email},</p>
                         <p>The user: {account_user} from {organization}  has submitted a request to use the archive. You can contact this user at <a href="mailto:{archive_email}">{archive_email}</a> 
-                        for more details if required.</p> To approve or decline this request please go to <a href="{site_url}admin/account_review">{site_url}/admin/account_review</a>. 
+                        for more details if required.</p> To approve or decline this request please go to <a href="{site_url}/admin/account_review">{site_url}/admin/account_review</a>. 
                         <p>{archive_email}</p>
                     """
                     mail_user(
