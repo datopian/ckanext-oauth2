@@ -184,8 +184,9 @@ class UserProfileController(MethodView):
                 if admin.email:
                     body = f"""
                         <p>Dear {admin.fullname or admin.email},</p>
-                        <p>The user: {account_user} from {organization}  has submitted a request to use the archive. You can contact this user at <a href="mailto:{archive_email}">{archive_email}</a> 
-                        for more details if required.</p> To approve or decline this request please go to <a href="{site_url}/admin/account_review">{site_url}/admin/account_review</a>. 
+                        <p>The user: {account_user} from {organization}  has submitted a request to use the archive.<br>
+                        You can contact this user at <a href="mailto:{archive_email}">{archive_email}</a>for more details if required.<br>
+                        To approve or decline this request please go to <a href="{site_url}/admin/account_review">{site_url}/admin/account_review</a>.</p>
                         <p>{archive_email}</p>
                     """
                     mail_user(
@@ -277,6 +278,16 @@ class AccountReview(MethodView):
         return context
 
     def _mail_user(self, user, type, message=None):
+        if message:
+            f"""
+            <strong>Message from Archive Manager:</strong>
+            <blockquote style="background-color: #f2f2f2; padding: 4px; border-left: 4px solid #bc9191;">
+                <p>{message}</p>
+            </blockquote>
+            """
+        else:
+            message = ""
+
         extra_vars = {
             "site_url": tk.config.get("ckan.site_url"),
             "site_title": tk.config.get("ckan.site_title"),
@@ -284,6 +295,7 @@ class AccountReview(MethodView):
             "signature": tk.h.archive_manager_email(),
             "message": message,
         }
+        
         if type == "reject":
             subject = tk._("NIRD ARCHIVE: Declined to use the archive")
             body = tk.render("email/account_rejected.txt", extra_vars=extra_vars)

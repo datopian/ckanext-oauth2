@@ -2,12 +2,9 @@
 {% trans %}
 <p>Dear {{ user_name }},</p>
 
-<p>Your request to register with the archive has been declined. The request has been evaluated according to the NIRD Research Data Archive’s mandate, and the archive must decline your request at this point.</p>
+<p>Your request to register with the archive has been declined.<br>The request has been evaluated according to the NIRD Research Data Archive’s mandate, and the archive must decline your request at this point.</p>
 
-<strong>Message administrator:</strong>
-<blockquote style="background-color: #f2f2f2; padding: 4px; border-left: 4px solid #bc9191;">
-    <p>{{ message }}</p>
-</blockquote>
+{{message}}
 
 {{ signature }}
 {% endtrans %}

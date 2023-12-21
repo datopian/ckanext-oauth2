@@ -2,8 +2,8 @@
 {% trans %}
 <p>Dear {{ user_name }},</p>
 
-<p>Your request to register with the archive has been approved. To access the archive please go to: <a href="{{ site_url }}/user/login">{{ site_url }}/user/login</a> to log into the archive. 
-You can deposit a new dataset by following the <a href="{{ site_url }}/dataset/new">{{ site_url }}/dataset/new</a> and you can search for datasets using the <a href="{{ site_url }}/dataset">{{ site_url }}/dataset</a>. More information can be found in the user guide </p>
+<p>Your request to register with the archive has been approved.<br>To access the archive please go to: <a href="{{ site_url }}/user/login">{{ site_url }}/user/login</a> to log into the archive.<br>
+You can deposit a new dataset by following the <a href="{{ site_url }}/dataset/new">{{ site_url }}/dataset/new</a> and you can search for datasets using the <a href="{{ site_url }}/dataset">{{ site_url }}/dataset</a>.<br>More information can be found in the user guide</p>
 
 <p>{{ signature }}</p>
 {% endtrans %}
