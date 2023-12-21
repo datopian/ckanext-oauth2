@@ -81,15 +81,12 @@ def login(provider):
     return tk.redirect_to(auth_url)
 
 
-def __set_incomplete_registration_session(user, provider):
-    session["incomplete_registration"] = {
-        "id": user.id,
-        "provider": provider,
-    }
+def __set_incomplete_registration_session(user):
+    session["incomplete_registration"] = user.id
 
 
 def _check_incomplete_registration(user_id):
-    user = session.get("incomplete_registration", {}).get("id")
+    user = session.get("incomplete_registration", None)
     if user == user_id:
         return True
     return False
@@ -118,7 +115,7 @@ def callback(provider):
         if tk.config.get(
             "ckanext.oauth2.profile_update_on_registration", False
         ) and not oauth2helper.get_stored_token(user.name):
-            __set_incomplete_registration_session(user, provider)
+            __set_incomplete_registration_session(user)
             return tk.redirect_to("oauth2.profile_update", user_id=user.id)
 
         if (
@@ -138,7 +135,8 @@ def callback(provider):
                 "Your account is reviewed and rejected. If you have any questions about your account, please contact the site administrator"
             )
             return tk.redirect_to("user.login")
-
+        
+        session["login_provider"] = provider
         _remove_incomplete_registration_session_if_exists()
         return _login_and_redirect(oauth2helper, user, token)
 
