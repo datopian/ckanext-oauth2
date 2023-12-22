@@ -135,7 +135,7 @@ def callback(provider):
                 "Your account is reviewed and rejected. If you have any questions about your account, please contact the site administrator"
             )
             return tk.redirect_to("user.login")
-        
+
         session["login_provider"] = provider
         _remove_incomplete_registration_session_if_exists()
         return _login_and_redirect(oauth2helper, user, token)
@@ -204,12 +204,19 @@ class UserProfileController(MethodView):
                 raise
             data_dict = {"id": user_id}
             user = tk.get_action("user_show")(context, data_dict)
+
+            organizations_available = tk.get_action("organization_list")(
+                context, {"all_fields": True}
+            )
+
             extra_vars = {
                 "data": user,
                 "errors": {},
                 "error_summary": {},
                 "hide_masterhead": True,
+                "organizations_available": organizations_available,
             }
+
             return tk.render("user/profie_update.html", extra_vars=extra_vars)
         except Exception as e:
             return tk.abort(404, "User not found")
@@ -220,6 +227,7 @@ class UserProfileController(MethodView):
             if not _check_incomplete_registration(user_id):
                 raise
             data_dict = dict(tk.request.form)
+            print(tk.request.form)
             data_dict["id"] = user_id
             include_fileds = [
                 "id",
@@ -240,6 +248,9 @@ class UserProfileController(MethodView):
             if not user_token:
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
+                user_token.organization = {
+                    "name": tk.request.form.get("organization", "")
+                }
                 model.Session.add(user_token)
                 model.Session.commit()
 
@@ -293,7 +304,7 @@ class AccountReview(MethodView):
             "signature": tk.h.archive_manager_email(),
             "message": message,
         }
-        
+
         if type == "reject":
             subject = tk._("NIRD ARCHIVE: Declined to use the archive")
             body = tk.render("email/account_rejected.txt", extra_vars=extra_vars)
@@ -315,11 +326,25 @@ class AccountReview(MethodView):
     def get(self):
         context = self.__prepare()
         users = (
-            model.Session.query(model.User)
-            .filter(model.User.state.in_(["pending", "rejected", "active"]))
+            model.Session.query(
+                model.User.name,
+                model.User.fullname,
+                model.User.email,
+                model.User.state,
+                model.User.about,
+                model.User.created,
+                db.UserToken.organization,
+            )
+            .outerjoin(db.UserToken, model.User.name == db.UserToken.user_name)
+            .filter(
+                model.User.state.in_(["pending", "rejected", "active"]),
+            )
             .order_by(model.User.created)
             .all()
         )
+
+        users = [dict(zip(user.keys(), user)) for user in users]
+
         extra_vars = {
             "users": users,
             "pending_count": len(users),

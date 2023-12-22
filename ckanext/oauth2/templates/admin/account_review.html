@@ -22,7 +22,15 @@
             <td class="hidden">{{user.state}}</td>
             <td>
                 {% if user.state in ['pending'] %}
+
                 <div class="account-review-action">
+                    <button type="button" class="btn btn-default btn-sm" data-bs-toggle="modal"
+                        data-bs-target="#user-detail">
+                        <i class="fab fa-eye"></i>
+                        {{ _('View') }}
+                    </button>
+
+
                     <form method="POST">
                         <input type="hidden" value="{{ user.id }}" name="id" />
                         <input type="hidden" value="approve" name="action" />
@@ -36,6 +44,45 @@
                         {{ _('Reject') }}
                     </button>
 
+                    <div class="modal" id="user-detail">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 class="modal-title">{{ _('Account Details') }}
+                                    </h4>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+
+                                <div class="modal-body">
+                                    {}
+                                    <table>
+                                        <tr>
+                                            <td>{{ _('Name') }}</td>
+                                            <td>{{ user.name }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>{{ _('Email') }}</td>
+                                            <td>{{ user.email }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>{{ _('Organization') }}</td>
+                                            <td>{{ user.organization }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>{{ _('About') }}</td>
+                                            <td>{{ user.about }}</td>
+                                        </tr>
+                                    </table>
+
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-default" data-bs-dismiss="modal"> {{
+                                        _('Cancel') }}</button>
+                                </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="modal" id="reject-modal">
                         <div class="modal-dialog">

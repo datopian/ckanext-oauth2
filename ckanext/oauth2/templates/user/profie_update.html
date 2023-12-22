@@ -3,6 +3,12 @@
 
 {% block subtitle %}{{ _('Manage Users') }}{% endblock %}
 
+{% block scripts %}
+{{ super() }}
+{% asset 'autocomplete-action' %}
+{% endblock %}
+
+
 {% block primary_content %}
 <article class="module">
   <div class="module-content">
@@ -29,10 +35,15 @@
       placeholder=_('eg. joe@example.com'), classes=['control-medium'], is_required=true) }}
       {% endif %}
 
-
-
       {{ form.markdown('about', label=_('About'), id='field-about', value=data.about, error=errors.about,
       placeholder=_('A little information about yourself')) }}
+
+      {{ form.input('Organization', label=_('organization'), id='field-organization', type='organization',
+      value=data.organization, error=errors.organization,
+      placeholder=_(''), classes=['control-medium'], attrs={'data-module': 'autocomplete', 'data-module-source':
+      '/api/2//util/organization/autocomplete?q=?', 'data-module-createtags': true, 'data-module-key': 'name',
+      'data-module-label': 'title',
+      'class': 'form-control'}, is_required=true ) }}
 
       {% set is_upload = data.image_url and not data.image_url.startswith('http') %}
       {% set is_url = data.image_url and data.image_url.startswith('http') %}
@@ -56,7 +67,8 @@
   {% block help_inner %}
   <h2 class="module-heading"><i class="fa fa-info-circle"></i> {{ _('Profile Info') }}</h2>
   <div class="module-content">
-    <p>{% trans %} Please enter your profile information. Your profile lets other CKAN users know about who you are and what you
+    <p>{% trans %} Please enter your profile information. Your profile lets other CKAN users know about who you are and
+      what you
       do.
       process.
       {% endtrans %}</p>
