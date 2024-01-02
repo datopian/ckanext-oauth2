@@ -20,6 +20,7 @@
 
 from __future__ import unicode_literals
 
+import re
 import logging
 import threading
 
@@ -30,8 +31,11 @@ from urllib.parse import urlparse
 import ckan.model as model
 from ckan.lib.mailer import mail_user
 from ckan.views.user import EditView
+from ckan.views.api import _finish_ok
 import ckan.logic as logic
 import ckan.lib.navl.dictization_functions as dictization_functions
+from sqlalchemy import or_
+
 from ckan.common import session
 import ckan.lib.helpers as helpers
 import ckan.plugins.toolkit as tk
@@ -40,6 +44,13 @@ from ckanext.oauth2 import constants
 from ckanext.oauth2 import db
 
 log = logging.getLogger(__name__)
+
+
+def _slugify(string):
+    string = string.lower()
+    string = re.sub(r"\s+", "-", string)  # Replace spaces with dashes
+    string = re.sub(r"[^\w\-]+", "", string)  # Remove non-word characters except dashes
+    return string
 
 
 def _get_previous_page(default_page):
@@ -135,7 +146,7 @@ def callback(provider):
                 "Your account is reviewed and rejected. If you have any questions about your account, please contact the site administrator"
             )
             return tk.redirect_to("user.login")
-        
+
         session["login_provider"] = provider
         _remove_incomplete_registration_session_if_exists()
         return _login_and_redirect(oauth2helper, user, token)
@@ -227,11 +238,17 @@ class UserProfileController(MethodView):
                 "email",
                 "about",
                 "image_url",
+                "organization",
                 "clear_upload",
                 "save",
             ]
             # filter out fields that are only item  in include_fileds
             data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
+
+            if not data_dict.get("organization"):
+                raise tk.ValidationError(
+                    {"organization": [tk._("Organization is required")]}
+                )
 
             user_dict = tk.get_action("user_update")(context, data_dict)
 
@@ -240,6 +257,7 @@ class UserProfileController(MethodView):
             if not user_token:
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
+                user_token.organization = {"name": data_dict.get("organization", "")}
                 model.Session.add(user_token)
                 model.Session.commit()
 
@@ -293,7 +311,7 @@ class AccountReview(MethodView):
             "signature": tk.h.archive_manager_email(),
             "message": message,
         }
-        
+
         if type == "reject":
             subject = tk._("NIRD ARCHIVE: Declined to use the archive")
             body = tk.render("email/account_rejected.txt", extra_vars=extra_vars)
@@ -315,11 +333,26 @@ class AccountReview(MethodView):
     def get(self):
         context = self.__prepare()
         users = (
-            model.Session.query(model.User)
-            .filter(model.User.state.in_(["pending", "rejected", "active"]))
+            model.Session.query(
+                model.User.id,
+                model.User.name,
+                model.User.fullname,
+                model.User.email,
+                model.User.state,
+                model.User.about,
+                model.User.created,
+                db.UserToken.organization,
+            )
+            .outerjoin(db.UserToken, model.User.name == db.UserToken.user_name)
+            .filter(
+                model.User.state.in_(["pending", "rejected", "active"]),
+            )
             .order_by(model.User.created)
             .all()
         )
+
+        users = [dict(zip(user.keys(), user)) for user in users]
+
         extra_vars = {
             "users": users,
             "pending_count": len(users),
@@ -333,16 +366,52 @@ class AccountReview(MethodView):
         action = tk.request.form.get("action")
         message = tk.request.form.get("message")
         user = model.User.get(user_id)
+
+        user_extra = db.UserToken.by_user_name(user_name=user.name)
+
         if not user:
             tk.abort(404, tk._("User not found"))
 
         if action == "approve":
-            user.state = "active"
-            self._mail_user(user, type="approve")
+            try:
+                user.state = "active"
+                # Create an organization if not already exists
+                if not tk.h.is_organization_exist(user_extra.organization.get("name")):
+                    log.info(
+                        "Creating organization: %s", user_extra.organization.get("name")
+                    )
+                    org_dict = {
+                        "name": _slugify(user_extra.organization.get("name")),
+                        "title": user_extra.organization.get("name"),
+                        "description": user_extra.organization.get("name"),
+                        "state": "active",
+                        "type": "organization",
+                    }
+                    tk.get_action("organization_create")(context, org_dict)
 
-            tk.get_action("user_update")(
-                context, {"id": user_id, "state": "active", "email": user.email}
-            )
+                # add user to organization
+                log.info(
+                    "Adding user to organization: %s",
+                    user_extra.organization.get("name"),
+                )
+                tk.get_action("member_create")(
+                    context,
+                    {
+                        "id": _slugify(user_extra.organization.get("name")),
+                        "object": user.name,
+                        "object_type": "user",
+                        "capacity": "Editor",
+                    },
+                )
+            except Exception as e:
+                log.error("Error approving user: %s", e)
+                tk.h.flash_error(
+                    tk._(
+                        "Failed to approve user, please contact the site administrator"
+                    )
+                )
+
+            self._mail_user(user, type="approve")
         elif action == "reject":
             user.state = "rejected"
             self._mail_user(user, type="reject", message=message)
@@ -444,6 +513,31 @@ def _reset_redirect():
     return tk.abort(404, tk._("Not found"))
 
 
+def org_autocomplete():
+    q = tk.request.args.get("q", "")
+    limit = tk.request.args.get("limit", 20)
+    q = model.Session.query(model.Group).filter(
+        or_(
+            model.Group.name.contains(q),
+            model.Group.title.ilike("%" + q + "%"),
+        )
+    )
+    q = q.filter(model.Group.type == "organization")
+    q = q.filter(model.Group.state == "active")
+    q.order_by(model.Group.title)
+
+    q = q.limit(limit)
+
+    group_list = []
+    for group in q.all():
+        result_dict = {}
+        for k in ["id", "name", "title", "image_url"]:
+            result_dict[k] = getattr(group, k)
+        group_list.append(result_dict)
+
+    return _finish_ok(group_list)
+
+
 oauth2 = Blueprint("oauth2", __name__)
 
 oauth2.add_url_rule(
@@ -470,6 +564,8 @@ _edit_view = UserEditView.as_view(str("edit"))
 oauth2.add_url_rule("/user/edit", view_func=_edit_view)
 oauth2.add_url_rule("/user/edit/<id>", view_func=_edit_view)
 oauth2.add_url_rule("/user/reset", view_func=_reset_redirect)
+
+oauth2.add_url_rule("/api/3/util/organization/autocomplete", view_func=org_autocomplete)
 
 
 def get_blueprint():

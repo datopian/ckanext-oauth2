@@ -64,9 +64,9 @@
 
 .account-review-action {
     display: flex;
-    
 }
-.account-review-action form {
+
+.account-review-action button {
     margin-right: 10px;
 }
 
@@ -97,3 +97,49 @@
     border: 1px solid #dee2e6;
     
 }
+
+.select2-container {
+    padding: 0;
+}
+
+.organization-option {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.image-container {
+    width: 50px;
+    height: 40px;
+    overflow: hidden; 
+  }
+
+  .image-container img {
+    padding-right:10px;
+    width: 100%;
+    height: 100%;
+    object-fit: cover; 
+  }
+
+  .select2-container .select2-choice {
+    height: 35px !important;
+    padding: 4px 0 0 8px !important;
+    border: 1px solid #ced4da;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.075);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  }
+  
+  .select2-container {
+    width: 100%;
+  }
+
+  .select2-chosen .organization-option .image-container {
+    width: 30px;
+    height: 26px;
+  }
+  
+  .select2-container .select2-choice .select2-arrow b {
+    margin-top: 4px;
+  }
+
+  

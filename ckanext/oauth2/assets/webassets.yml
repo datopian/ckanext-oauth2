@@ -12,3 +12,9 @@ oauth2-js:
     - datatables.min.js
     - script.js
   
+autocomplete-organization:
+  filters: rjsmin
+  output: ckanext-oauth2/%(version)s-autocomplete-organization.js
+  contents:
+    - autocomplete-organization.js
+  

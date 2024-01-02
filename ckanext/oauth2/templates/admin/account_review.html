@@ -14,6 +14,7 @@
     </thead>
     <tbody>
         {% for user in users %}
+        {% set organization = h.is_organization_exist(user.organization.name or "") %}
         <tr>
             <td style="display: flex; justify-content: space-between;">
                 <a href="/user/{{ user.name }}">{{ user.fullname or user.email }}</a>
@@ -23,6 +24,12 @@
             <td>
                 {% if user.state in ['pending'] %}
                 <div class="account-review-action">
+
+                    <button type="button" class="btn btn-default btn-sm" data-bs-toggle="modal"
+                        data-bs-target="#user-detail-{{user.name}}">
+                        {{ _('View') }}
+                    </button>
+
                     <form method="POST">
                         <input type="hidden" value="{{ user.id }}" name="id" />
                         <input type="hidden" value="approve" name="action" />
@@ -36,6 +43,53 @@
                         {{ _('Reject') }}
                     </button>
 
+                    <div class="modal" id="user-detail-{{user.name}}">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 class="modal-title">{{ _('Account Details') }}
+                                    </h4>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+
+                                <div class="modal-body">
+                                    <table>
+                                        <tr>
+                                            <td>{{ _('Name') }}:</td>
+                                            <td>{{ user.fullname or user.name }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>{{ _('Email') }}:</td>
+                                            <td>{{ user.email }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td>{{ _('Organization') }}:</td>
+                                            {% if organization %}
+                                            <td><a href="{{ h.url_for('organization.read', id=organization.name) }}">
+                                                    {{organization.title}} </a>
+                                            {% elif user.organization.name %}
+                                            <td>{{ user.organization.name }} <span
+                                                    class="badge badge-success">New</span>
+                                            </td>
+                                            {% else %}
+                                            <td>{{ _('No organization') }}</td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            <td>{{ _('About') }}:</td>
+                                            <td>{{ user.about }}</td>
+                                        </tr>
+                                    </table>
+
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-default" data-bs-dismiss="modal"> {{
+                                        _('Cancel') }}</button>
+                                </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="modal" id="reject-modal">
                         <div class="modal-dialog">
