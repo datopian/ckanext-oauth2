@@ -26,7 +26,7 @@
 
                 <div class="account-review-action">
                     <button type="button" class="btn btn-default btn-sm" data-bs-toggle="modal"
-                        data-bs-target="#user-detail-{{user.name}}">
+                        data-bs-target="#user-detail-{{user.id}}">
                         {{ _('View') }}
                     </button>
 
@@ -39,11 +39,11 @@
                     </form>
 
                     <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal"
-                        data-bs-target="#reject-modal">
+                        data-bs-target="#reject-modal-{{user.id}}">
                         {{ _('Reject') }}
                     </button>
 
-                    <div class="modal" id="user-detail-{{user.name}}">
+                    <div class="modal" id="user-detail-{{user.id}}">
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
@@ -90,7 +90,7 @@
                         </div>
                     </div>
 
-                    <div class="modal" id="reject-modal">
+                    <div class="modal" id="reject-modal-{{user.id}}">
                         <div class="modal-dialog">
                             <form method="POST">
 
