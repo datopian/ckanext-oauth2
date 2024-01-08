@@ -23,8 +23,8 @@
             <td class="hidden">{{user.state}}</td>
             <td>
                 {% if user.state in ['pending'] %}
-                <div class="account-review-action">
 
+                <div class="account-review-action">
                     <button type="button" class="btn btn-default btn-sm" data-bs-toggle="modal"
                         data-bs-target="#user-detail-{{user.name}}">
                         {{ _('View') }}
@@ -77,7 +77,6 @@
                                         </tr>
                                         <tr>
                                             <td>{{ _('About') }}:</td>
-                                            <td>{{ user.about }}</td>
                                         </tr>
                                     </table>
 

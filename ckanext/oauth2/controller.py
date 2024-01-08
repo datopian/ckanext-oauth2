@@ -215,12 +215,19 @@ class UserProfileController(MethodView):
                 raise
             data_dict = {"id": user_id}
             user = tk.get_action("user_show")(context, data_dict)
+
+            organizations_available = tk.get_action("organization_list")(
+                context, {"all_fields": True}
+            )
+
             extra_vars = {
                 "data": user,
                 "errors": {},
                 "error_summary": {},
                 "hide_masterhead": True,
+                "organizations_available": organizations_available,
             }
+
             return tk.render("user/profie_update.html", extra_vars=extra_vars)
         except Exception as e:
             return tk.abort(404, "User not found")
@@ -231,6 +238,7 @@ class UserProfileController(MethodView):
             if not _check_incomplete_registration(user_id):
                 raise
             data_dict = dict(tk.request.form)
+            print(tk.request.form)
             data_dict["id"] = user_id
             include_fileds = [
                 "id",
@@ -258,6 +266,7 @@ class UserProfileController(MethodView):
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
                 user_token.organization = {"name": data_dict.get("organization", "")}
+
                 model.Session.add(user_token)
                 model.Session.commit()
 
