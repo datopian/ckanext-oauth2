@@ -238,7 +238,7 @@ class UserProfileController(MethodView):
             if not _check_incomplete_registration(user_id):
                 raise
             data_dict = dict(tk.request.form)
-            print(tk.request.form)
+            
             data_dict["id"] = user_id
             include_fileds = [
                 "id",
@@ -247,11 +247,17 @@ class UserProfileController(MethodView):
                 "about",
                 "image_url",
                 "organization",
+                "organization_email",
+                "organization_url",
                 "clear_upload",
                 "save",
             ]
             # filter out fields that are only item  in include_fileds
             data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
+            if not data_dict.get("fullname"):
+                raise tk.ValidationError(
+                    {"fullname": [tk._("Full name is required")]}
+                )
 
             if not data_dict.get("organization"):
                 raise tk.ValidationError(
@@ -265,8 +271,11 @@ class UserProfileController(MethodView):
             if not user_token:
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
-                user_token.organization = {"name": data_dict.get("organization", "")}
-
+                user_token.organization = {
+                    "name": data_dict.get("organization", ""),
+                    "email": data_dict.get("organization_email", ""),
+                    "url": data_dict.get("organization_url", ""),
+                }
                 model.Session.add(user_token)
                 model.Session.commit()
 
@@ -393,9 +402,12 @@ class AccountReview(MethodView):
                         "name": _slugify(user_extra.organization.get("name")),
                         "title": user_extra.organization.get("name"),
                         "description": user_extra.organization.get("name"),
+                        "org_url": user_extra.organization.get("url"),
+                        "email": user_extra.organization.get("email"),
                         "state": "active",
-                        "type": "organization",
+                        "type": "organization"
                     }
+
                     tk.get_action("organization_create")(context, org_dict)
 
                 # add user to organization

@@ -77,7 +77,18 @@
                                         </tr>
                                         <tr>
                                             <td>{{ _('About') }}:</td>
+                                            <td>{{ user.about or "Null"}}</td>
                                         </tr>
+                                        {% if not organization %}
+                                        <tr>
+                                            <td>{{ _('Organization Email') }}:</td>
+                                            <td><a href="mailto:{{ user.organization.email }}">{{ user.organization.email }}</a>
+                                        </tr>
+                                        <tr>
+                                            <td>{{ _('Organization Url') }}:</td>
+                                            <td><a href="{{ user.organization.url }}">{{ user.organization.url }}</a>
+                                        </tr>
+                                        {% endif %}
                                     </table>
 
                                 </div>

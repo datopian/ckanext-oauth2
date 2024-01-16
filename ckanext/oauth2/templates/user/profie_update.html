@@ -35,15 +35,9 @@
       placeholder=_('eg. joe@example.com'), classes=['control-medium'], is_required=true) }}
       {% endif %}
 
-      {{ form.markdown('about', label=_('About'), id='field-about', value=data.about, error=errors.about,  classes=['control-medium'],
+      {{ form.markdown('about', label=_('About'), id='field-about', value=data.about, error=errors.about,
+      classes=['control-medium'],
       placeholder=_('A little information about yourself')) }}
-
-      {{ form.input('organization', label=_('Organization'), id='field-organization', type='organization',
-      value=data.organization, error=errors.organization,
-      placeholder=_(''), classes=['control-medium'], attrs={'data-module': 'autocomplete-organization', 'data-module-source':
-      '/api/3/util/organization/autocomplete?q=?', 'data-module-createtags': true, 'data-module-key': 'name',
-      'data-module-label': 'title',
-      'class': ''}, is_required=true ) }}
 
       {% set is_upload = data.image_url and not data.image_url.startswith('http') %}
       {% set is_url = data.image_url and data.image_url.startswith('http') %}
@@ -51,6 +45,28 @@
       {{ form.image_upload(data, errors, is_upload_enabled=h.uploads_enabled(), is_url=is_url,
       is_upload=is_upload,
       upload_label=_('Profile picture'), url_label=_('Profile picture URL') ) }}
+
+
+      <div class="organization-form-groups">
+        <span class="group-label">{{ _("Organization Details")}}</span>
+        {{ form.input('organization', label=_('Organization Name'), id='field-organization', type='organization',
+        value=data.organization, error=errors.organization,
+        placeholder=_(''), classes=['control-medium'], attrs={'data-module': 'autocomplete-organization',
+        'data-module-source': '/api/3/util/organization/autocomplete?q=?', 'data-module-createtags': true,
+        'data-module-key': 'name',
+        'data-module-label': 'title', 'class': ''}, is_required=true ) }}
+
+        <div class="organization-fields">
+          {{ form.input('organization_email', label=_('Email'), id='field-organization-email', type='email',
+          value=data.organization_url, error=errors.organization_url,
+          placeholder=_('eg. your_org_email@example.com'), classes=['control-medium'], attrs={'class': 'form-control'}
+          ) }}
+
+          {{ form.input('organization_url', label=_('Url'), id='field-organization-url', type='text', value=data.organization_email,
+          error=errors.organization_email, classes=['control-medium'], attrs={'class': 'form-control'}
+          )}}
+        </div>
+      </div>
 
       {{ form.required_message() }}
       <button class="btn btn-primary" type="submit" name="save">{{ _('Update and Continue') }}</button>

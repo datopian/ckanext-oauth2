@@ -50,7 +50,7 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
     setupAutoComplete: function () {
       var settings = {
         formatResult: this.formatResult,
-        formatSelection: this.formatResult,
+        formatSelection: this.formatSelection,
         formatNoMatches: this.formatNoMatches,
         formatInputTooShort: this.formatInputTooShort,
         dropdownCssClass: this.options.dropdownClass,
@@ -84,6 +84,7 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
           }
         }
       }
+      $('#user-edit-form').find('.organization-fields').hide()
 
       var select2 = this.el.select2(settings).data('select2');
 
@@ -208,12 +209,12 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
         result.push(escapeMarkup ? escapeMarkup(this) : this);
       });
 
-    
+
 
       var value = result.join(term && (escapeMarkup ? escapeMarkup(term) : term).bold())
-      
+
       if (!value) return;
-    
+
       // image with aspecting ratio
 
       var imgSrc = '';
@@ -226,11 +227,57 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
       }
 
       value = '<div class="organization-option">' +
-                '<div class="image-container">' +
-                  '<img src="' + imgSrc + '" />' +
-                '</div>' +
-                '<span>' + value + '</span>' +
-              '</div>';
+        '<div class="image-container">' +
+        '<img src="' + imgSrc + '" />' +
+        '</div>' +
+        '<span>' + value + '</span>' +
+        '</div>';
+
+      return value;
+    },
+
+    formatSelection: function (state, container, query, escapeMarkup) {
+      console.log(state)
+      var term = this._lastTerm || (query ? query.term : null) || null; // same as query.term
+
+      if (container) {
+        // Append the select id to the element for styling.
+        container.attr('data-value', state.id);
+      }
+
+      var result = [];
+      $(state.text.split(term)).each(function () {
+        result.push(escapeMarkup ? escapeMarkup(this) : this);
+      });
+
+
+
+      var value = result.join(term && (escapeMarkup ? escapeMarkup(term) : term).bold())
+
+      if (!value) return;
+
+      // image with aspecting ratio
+
+      var imgSrc = '';
+      if (state.image && state.image.startsWith('http')) {
+        imgSrc = state.image;
+      } else if (state.image) {
+        imgSrc = '/uploads/group/' + state.image;
+      } else {
+        imgSrc = '/base/images/placeholder-organization.png';
+      }
+      value = '<div class="organization-option">' +
+        '<div class="image-container">' +
+        '<img src="' + imgSrc + '" />' +
+        '</div>' +
+        '<span>' + value + '</span>' +
+        '</div>';
+        
+      if (state.image) {
+        $('#user-edit-form').find('.organization-fields').hide()
+      } else {
+        $('#user-edit-form').find('.organization-fields').show()
+      }
 
       return value;
     },

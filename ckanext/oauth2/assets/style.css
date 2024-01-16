@@ -93,9 +93,25 @@
     margin-top: 10px;
     padding: 0;
 }
+
 #review-user-table_paginate li:hover {
     border: 1px solid #dee2e6;
     
+}
+
+.organization-form-groups {
+    border: 1px solid #d8d8d8;
+    padding: 12px;
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.organization-form-groups .group-label {
+    position: absolute;
+    top: -16px;
+    background: #ffff;
+    padding: 4px;
+    font-weight: 800;
 }
 
 .select2-container {
