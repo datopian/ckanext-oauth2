@@ -208,6 +208,29 @@ class UserProfileController(MethodView):
             log.error("Error sending email: %s", e)
             tk.h.flash_error(tk._("Failed to send email to admin users"))
 
+    def _mail_user(self, user_id):
+        user = model.User.get(user_id)
+
+        extra_vars = {
+            "site_url": tk.config.get("ckan.site_url"),
+            "site_title": tk.config.get("ckan.site_title"),
+            "user_name": user.fullname if user.fullname else user.name,
+            "signature": tk.h.archive_manager_email(),
+        }
+        subject = tk._(" NIRD Research Data Archive")
+        body = tk.render("email/account_pending.txt", extra_vars=extra_vars)
+        try:
+            if user.email:
+                mail_user(
+                    recipient=user,
+                    subject=subject,
+                    body="",
+                    body_html=body,
+                )
+        except Exception as e:
+            log.error("Error sending email: %s", e)
+            tk.h.flash_error(tk._("Failed to send email to user"))
+
     def get(self, user_id):
         context = self._prepare()
         try:
@@ -238,7 +261,7 @@ class UserProfileController(MethodView):
             if not _check_incomplete_registration(user_id):
                 raise
             data_dict = dict(tk.request.form)
-            
+
             data_dict["id"] = user_id
             include_fileds = [
                 "id",
@@ -255,9 +278,7 @@ class UserProfileController(MethodView):
             # filter out fields that are only item  in include_fileds
             data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
             if not data_dict.get("fullname"):
-                raise tk.ValidationError(
-                    {"fullname": [tk._("Full name is required")]}
-                )
+                raise tk.ValidationError({"fullname": [tk._("Full name is required")]})
 
             if not data_dict.get("organization"):
                 raise tk.ValidationError(
@@ -282,6 +303,8 @@ class UserProfileController(MethodView):
             # Now remove the incomplete registration session also
             # as the user has completed the profile update process already
             _remove_incomplete_registration_session_if_exists()
+
+            self._mail_user(user_dict.get("id"))
 
             thread = threading.Thread(target=self._mail_admins, args=(user_dict,))
             thread.start()
@@ -405,7 +428,7 @@ class AccountReview(MethodView):
                         "org_url": user_extra.organization.get("url"),
                         "email": user_extra.organization.get("email"),
                         "state": "active",
-                        "type": "organization"
+                        "type": "organization",
                     }
 
                     tk.get_action("organization_create")(context, org_dict)
