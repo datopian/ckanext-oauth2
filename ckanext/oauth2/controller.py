@@ -284,7 +284,7 @@ class UserProfileController(MethodView):
                 raise tk.ValidationError(
                     {"organization": [tk._("Organization is required")]}
                 )
-
+            data_dict["state"] = "pending"
             user_dict = tk.get_action("user_update")(context, data_dict)
 
             # Add user user token table, which means the user has completed profile update process
@@ -463,6 +463,12 @@ class AccountReview(MethodView):
             tk.get_action("user_update")(
                 context, {"id": user_id, "state": "rejected", "email": user.email}
             )
+
+            # Delete user token if exists to allow user to register again
+            user_token = db.UserToken.by_user_name(user_name=user.name)
+            if user_token:
+                model.Session.delete(user_token)
+                model.Session.commit()
 
         tk.h.flash_success(
             tk._('User account "{}" successfully  {}.').format(
