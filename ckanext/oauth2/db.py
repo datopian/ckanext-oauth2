@@ -42,7 +42,7 @@ def init_db(model):
             sa.Column('refresh_token', sa.types.UnicodeText),
             sa.Column('expires_in', sa.types.UnicodeText),
             sa.Column('provider', sa.types.UnicodeText),
-            sa.Column('organization', sa.types.JSON),
+            # sa.Column('organization', sa.types.JSON),
         )
 
         # Create the table only if it does not exist
