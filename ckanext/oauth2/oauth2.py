@@ -62,6 +62,7 @@ REQUIRED_CONF = (
     "profile_api_url",
     "profile_api_user_field",
     "profile_api_mail_field",
+    "profile_api_secondary_mail_field",
 )
 
 
@@ -91,6 +92,7 @@ class OAuth2Helper(object):
                 "profile_api_last_name_field"
             )
             self.profile_api_mail_field = oauth_cofig["profile_api_mail_field"]
+            self.profile_api_secondary_mail_field = oauth_cofig["profile_api_secondary_mail_field"]
             self.scope = "%s" % oauth_cofig["scope"]
             self.profile_api_fullname_field = oauth_cofig.get(
                 "profile_api_fullname_field", None
@@ -236,6 +238,8 @@ class OAuth2Helper(object):
             email = [e["email"] for e in user_data if e["primary"] == True][0]
         else:
             email = user_data.get(self.profile_api_mail_field)
+            if(not email): 
+                email = user_data.get(self.profile_api_secondary_mail_field)
         profile_update_on_registration = toolkit.config.get(
             "ckanext.oauth2.profile_update_on_registration", False
         )
