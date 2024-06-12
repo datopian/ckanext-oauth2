@@ -333,7 +333,7 @@ class AccountReview(MethodView):
                 model.User.state,
                 model.User.about,
                 model.User.created,
-                db.UserToken.organization,
+                # db.UserToken.organization,
             )
             .outerjoin(db.UserToken, model.User.name == db.UserToken.user_name)
             .filter(
