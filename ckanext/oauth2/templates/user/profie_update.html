@@ -5,7 +5,7 @@
 
 {% block scripts %}
 {{ super() }}
-{% asset 'autocomplete-action' %}
+{% asset 'oauth2/autocomplete-institution' %}
 {% endblock %}
 
 
@@ -36,14 +36,8 @@
       {% endif %}
 
       {{ form.markdown('about', label=_('About'), id='field-about', value=data.about, error=errors.about,
+      classes=['control-medium'],
       placeholder=_('A little information about yourself')) }}
-
-      {{ form.input('Organization', label=_('organization'), id='field-organization', type='organization',
-      value=data.organization, error=errors.organization,
-      placeholder=_(''), classes=['control-medium'], attrs={'data-module': 'autocomplete', 'data-module-source':
-      '/api/2//util/organization/autocomplete?q=?', 'data-module-createtags': true, 'data-module-key': 'name',
-      'data-module-label': 'title',
-      'class': 'form-control'}, is_required=true ) }}
 
       {% set is_upload = data.image_url and not data.image_url.startswith('http') %}
       {% set is_url = data.image_url and data.image_url.startswith('http') %}
@@ -51,6 +45,35 @@
       {{ form.image_upload(data, errors, is_upload_enabled=h.uploads_enabled(), is_url=is_url,
       is_upload=is_upload,
       upload_label=_('Profile picture'), url_label=_('Profile picture URL') ) }}
+
+      <br>
+
+      <div class="institution-form-groups">
+        <span class="group-label">{{ _("Institution Details")}}</span>
+        {{ form.input('institution', label=_('Name'), id='field-institution', type='institution',
+        value=data.institution, error=errors.institution, placeholder=_('Search or provide your institution name'),
+        classes=['control-medium'], attrs={
+        'class': 'form-control',
+        'data-module': 'autocomplete-institution',
+        'data-module-source': '/api/3/util/institution/autocomplete?q=?',
+        'data-module-createtags': true,
+        'data-module-key': 'name',
+        'data-module-label': 'title'
+        }, is_required=true ) }}
+
+        <div class="institution-fields">
+          {{ form.input('institution_email', label=_('Email'), id='field-institution-email', type='email',
+          value=data.institution_email, error=errors.institution_email,
+          placeholder=_('eg. your_institution_email@example.com'),
+          classes=['control-medium'], attrs={'class': 'form-control'}
+          ) }}
+
+          {{ form.input('institution_url', label=_('Url'), id='field-institution-url', type='text',
+          value=data.institution_url, error=errors.institution_url, classes=['control-medium'],
+          attrs={'class': 'form-control'}
+          )}}
+        </div>
+      </div>
 
       {{ form.required_message() }}
       <button class="btn btn-primary" type="submit" name="save">{{ _('Update and Continue') }}</button>

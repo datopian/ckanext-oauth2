@@ -1,0 +1,9 @@
+{% trans %}
+<p>Dear {{ user_name }},</p>
+
+<p>Thank you for registering for the {{ site_title }}. Your application is currently pending approval. You will receive another email with the outcome soon. </p>
+<p>If you have not initiated a registration request, please contact the Archive Manager {{signature}}.</p>
+
+Archive Manager
+<p>{{ signature }}</p>
+{% endtrans %}

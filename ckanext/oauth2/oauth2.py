@@ -211,6 +211,9 @@ class OAuth2Helper(object):
                     raise
             except Exception as e:
                 raise e
+            
+            # TODO: Remove this later on production  
+            logging.info(profile_response.json())
 
             # Token can be invalid
             if not profile_response.ok:

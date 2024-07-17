@@ -4,7 +4,9 @@
 
 <p>Your request to register with the archive has been declined.<br>The request has been evaluated according to the NIRD Research Data Archive’s mandate, and the archive must decline your request at this point.</p>
 
-{{message}}
+<blockquote style="border-left: 2px solid #ddd; padding-left: 10px; margin-left: 0;">
+    <p>{{message}}</p>
+</blockquote>
 
 {{ signature }}
 {% endtrans %}
