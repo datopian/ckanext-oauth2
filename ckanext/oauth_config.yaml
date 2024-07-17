@@ -3,10 +3,42 @@ providers:
     authorization_endpoint: https://github.com/login/oauth/authorize
     token_endpoint:  https://github.com/login/oauth/access_token
     profile_api_url: https://api.github.com/user/emails
-    client_id: <your client id>
-    client_secret: <your client secret>
+    client_id: a73f04eee57184d37382
+    client_secret: e73495db12c9955245fa1d7ea90cd54988f2a7df
     scope: read:user,user:email
     profile_api_user_field: login
     profile_api_fullname_field : name
     profile_api_mail_field : email
-    
+  - name: ORCID
+    authorization_endpoint: https://orcid.org/oauth/authorize
+    token_endpoint: https://orcid.org/oauth/token
+    profile_api_url: https://orcid.org/oauth/userinfo
+    client_id: APP-MDTDHJ2AZYH2EXIA
+    client_secret: 08553743-4862-4789-91f4-84a64e5fca1b
+    scope: openid email 
+    profile_api_user_field: sub
+    profile_api_first_name_field: given_name
+    profile_api_last_name_field: family_name
+    profile_api_mail_field: 
+
+  - name: Feide
+    authorization_endpoint: https://auth.dataporten.no/oauth/authorization 
+    token_endpoint:  https://auth.dataporten.no/oauth/token
+    profile_api_url: https://auth.dataporten.no/openid/userinfo
+    client_id: 833e834a-c30e-4138-bc1f-cb43113b2b2c
+    client_secret: d4c0eb82-6143-4357-9a2e-dbee4d86101c
+    scope: userid groups-other openid email
+    profile_api_user_field: sub
+    profile_api_fullname_field : name
+    profile_api_mail_field : email
+
+  - name: microsoft
+    authorization_endpoint: https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize
+    token_endpoint:  https://login.microsoftonline.com/consumers/oauth2/v2.0/token
+    profile_api_url: https://graph.microsoft.com/v1.0/me
+    client_id: 
+    client_secret: 
+    scope: profile openid User.Read email
+    profile_api_user_field: displayName
+    profile_api_fullname_field : displayName
+    profile_api_mail_field : userPrincipalName

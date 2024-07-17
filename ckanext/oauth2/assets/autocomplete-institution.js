@@ -16,7 +16,7 @@
  *   // <input name="tags" data-module="autocomplete-organization" data-module-source="http://" />
  *
  */
-this.ckan.module('autocomplete-organization', function (jQuery) {
+this.ckan.module('autocomplete-institution', function (jQuery) {
   return {
     /* Options for the module */
     options: {
@@ -84,7 +84,7 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
           }
         }
       }
-      $('#user-edit-form').find('.organization-fields').hide()
+      $('#user-edit-form').find('.institution-fields').hide()
 
       var select2 = this.el.select2(settings).data('select2');
 
@@ -196,7 +196,6 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
      * Returns a text string.
      */
     formatResult: function (state, container, query, escapeMarkup) {
-      console.log(state)
       var term = this._lastTerm || (query ? query.term : null) || null; // same as query.term
 
       if (container) {
@@ -266,7 +265,7 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
       } else {
         imgSrc = '/base/images/placeholder-organization.png';
       }
-      value = '<div class="organization-option">' +
+      value = '<div class="institution-option">' +
         '<div class="image-container">' +
         '<img src="' + imgSrc + '" />' +
         '</div>' +
@@ -274,9 +273,9 @@ this.ckan.module('autocomplete-organization', function (jQuery) {
         '</div>';
         
       if (state.image) {
-        $('#user-edit-form').find('.organization-fields').hide()
+        $('#user-edit-form').find('.institution-fields').hide()
       } else {
-        $('#user-edit-form').find('.organization-fields').show()
+        $('#user-edit-form').find('.institution-fields').show()
       }
 
       return value;

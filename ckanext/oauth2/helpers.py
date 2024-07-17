@@ -32,7 +32,7 @@ def user_is_sso_user():
     return False
 
 
-def is_organization_exist(name_or_id):
+def is_institution_exist(name_or_id):
     context = {
         "model": model,
         "session": model.Session,
@@ -47,9 +47,7 @@ def is_organization_exist(name_or_id):
         return string
 
     try:
-        result = toolkit.get_action("organization_show")(
-            context, {"id": _slugify(name_or_id)}
-        )
+        result = toolkit.get_action("group_show")(context, {"id": _slugify(name_or_id)})
     except toolkit.ObjectNotFound:
         return False
     return result

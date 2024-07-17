@@ -182,7 +182,7 @@ class UserProfileController(MethodView):
     def _mail_admins(self, user):
         account_user = user.get("fullname", user.get("name"))
         site_url = tk.config.get("ckan.site_url")
-        organization = ""  # Not implemented yet
+        institution = ""  # Not implemented yet
         archive_email = tk.h.archive_manager_email()
 
         subject = tk._("NIRD ARCHIVE: user access request")
@@ -193,7 +193,7 @@ class UserProfileController(MethodView):
                 if admin.email:
                     body = f"""
                         <p>Dear {admin.fullname or admin.email},</p>
-                        <p>The user: {account_user} from {organization}  has submitted a request to use the archive.<br>
+                        <p>The user: {account_user} from {institution} has submitted a request to use the archive.<br>
                         You can contact this user at <a href="mailto:{archive_email}">{archive_email}</a>for more details if required.<br>
                         To approve or decline this request please go to <a href="{site_url}/admin/account_review">{site_url}/admin/account_review</a>.</p>
                         <p>{archive_email}</p>
@@ -239,16 +239,11 @@ class UserProfileController(MethodView):
             data_dict = {"id": user_id}
             user = tk.get_action("user_show")(context, data_dict)
 
-            organizations_available = tk.get_action("organization_list")(
-                context, {"all_fields": True}
-            )
-
             extra_vars = {
                 "data": user,
                 "errors": {},
                 "error_summary": {},
                 "hide_masterhead": True,
-                "organizations_available": organizations_available,
             }
 
             return tk.render("user/profie_update.html", extra_vars=extra_vars)
@@ -269,9 +264,9 @@ class UserProfileController(MethodView):
                 "email",
                 "about",
                 "image_url",
-                "organization",
-                "organization_email",
-                "organization_url",
+                "institution",
+                "institution_email",
+                "institution_url",
                 "clear_upload",
                 "save",
             ]
@@ -280,9 +275,9 @@ class UserProfileController(MethodView):
             if not data_dict.get("fullname"):
                 raise tk.ValidationError({"fullname": [tk._("Full name is required")]})
 
-            if not data_dict.get("organization"):
+            if not data_dict.get("institution"):
                 raise tk.ValidationError(
-                    {"organization": [tk._("Organization is required")]}
+                    {"institution": [tk._("institution name is required")]}
                 )
             data_dict["state"] = "pending"
             user_dict = tk.get_action("user_update")(context, data_dict)
@@ -292,10 +287,10 @@ class UserProfileController(MethodView):
             if not user_token:
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
-                user_token.organization = {
-                    "name": data_dict.get("organization", ""),
-                    "email": data_dict.get("organization_email", ""),
-                    "url": data_dict.get("organization_url", ""),
+                user_token.institution = {
+                    "name": data_dict.get("institution", ""),
+                    "email": data_dict.get("institution_email", ""),
+                    "url": data_dict.get("institution_url", ""),
                 }
                 model.Session.add(user_token)
                 model.Session.commit()
@@ -382,7 +377,7 @@ class AccountReview(MethodView):
                 model.User.state,
                 model.User.about,
                 model.User.created,
-                db.UserToken.organization,
+                db.UserToken.institution,
             )
             .outerjoin(db.UserToken, model.User.name == db.UserToken.user_name)
             .filter(
@@ -416,35 +411,36 @@ class AccountReview(MethodView):
         if action == "approve":
             try:
                 user.state = "active"
-                # Create an organization if not already exists
-                if not tk.h.is_organization_exist(user_extra.organization.get("name")):
+                # Create an institution if not already exists
+                if not tk.h.is_institution_exist(user_extra.institution.get("name")):
                     log.info(
-                        "Creating organization: %s", user_extra.organization.get("name")
+                        "Creating institution: %s", user_extra.institution.get("name")
                     )
-                    org_dict = {
-                        "name": _slugify(user_extra.organization.get("name")),
-                        "title": user_extra.organization.get("name"),
-                        "description": user_extra.organization.get("name"),
-                        "org_url": user_extra.organization.get("url"),
-                        "email": user_extra.organization.get("email"),
+                    tk.config.get("ckan.site_url")
+
+                    institution_dict = {
+                        "name": _slugify(user_extra.institution.get("name")),
+                        "title": user_extra.institution.get("name"),
+                        "description": user_extra.institution.get("name"),
+                        "website": user_extra.institution.get("url"),
+                        "email": user_extra.institution.get("email"),
                         "state": "active",
-                        "type": "organization",
+                        "type": "institution",
                     }
 
-                    tk.get_action("organization_create")(context, org_dict)
+                    tk.get_action("group_create")(context, institution_dict)
 
-                # add user to organization
+                # add user as member of the group
                 log.info(
-                    "Adding user to organization: %s",
-                    user_extra.organization.get("name"),
+                    "Adding user to institution: %s",
+                    user_extra.institution.get("name"),
                 )
-                tk.get_action("member_create")(
+                tk.get_action("group_member_create")(
                     context,
                     {
-                        "id": _slugify(user_extra.organization.get("name")),
-                        "object": user.name,
-                        "object_type": "user",
-                        "capacity": "Editor",
+                        "id": _slugify(user_extra.institution.get("name")),
+                        "username": user.name,
+                        "role": "member",
                     },
                 )
             except Exception as e:
@@ -563,7 +559,7 @@ def _reset_redirect():
     return tk.abort(404, tk._("Not found"))
 
 
-def org_autocomplete():
+def institution_autocomplete():
     q = tk.request.args.get("q", "")
     limit = tk.request.args.get("limit", 20)
     q = model.Session.query(model.Group).filter(
@@ -572,7 +568,7 @@ def org_autocomplete():
             model.Group.title.ilike("%" + q + "%"),
         )
     )
-    q = q.filter(model.Group.type == "organization")
+    q = q.filter(model.Group.type == "institution")
     q = q.filter(model.Group.state == "active")
     q.order_by(model.Group.title)
 
@@ -615,7 +611,9 @@ oauth2.add_url_rule("/user/edit", view_func=_edit_view)
 oauth2.add_url_rule("/user/edit/<id>", view_func=_edit_view)
 oauth2.add_url_rule("/user/reset", view_func=_reset_redirect)
 
-oauth2.add_url_rule("/api/3/util/organization/autocomplete", view_func=org_autocomplete)
+oauth2.add_url_rule(
+    "/api/3/util/institution/autocomplete", view_func=institution_autocomplete
+)
 
 
 def get_blueprint():

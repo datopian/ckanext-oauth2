@@ -99,14 +99,14 @@
     
 }
 
-.organization-form-groups {
+.institution-form-groups {
     border: 1px solid #d8d8d8;
     padding: 12px;
     position: relative;
     margin-bottom: 10px;
 }
 
-.organization-form-groups .group-label {
+.institution-form-groups .group-label {
     position: absolute;
     top: -16px;
     background: #ffff;
@@ -118,7 +118,7 @@
     padding: 0;
 }
 
-.organization-option {
+.institution-option {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -149,7 +149,7 @@
     width: 100%;
   }
 
-  .select2-chosen .organization-option .image-container {
+  .select2-chosen .institution-option .image-container {
     width: 30px;
     height: 26px;
   }

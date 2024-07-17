@@ -53,7 +53,7 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         return {
             "sso_login_options": helpers.get_sso_options,
             "user_is_sso_user": helpers.user_is_sso_user,
-            "is_organization_exist": helpers.is_organization_exist,
+            "is_institution_exist": helpers.is_institution_exist,
         }
 
     def get_blueprint(self):

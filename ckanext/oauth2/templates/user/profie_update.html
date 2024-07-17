@@ -4,8 +4,8 @@
 {% block subtitle %}{{ _('Manage Users') }}{% endblock %}
 
 {% block scripts %}
-  {{ super() }}
-  {% asset 'oauth2/autocomplete-organization' %}
+{{ super() }}
+{% asset 'oauth2/autocomplete-institution' %}
 {% endblock %}
 
 
@@ -46,24 +46,31 @@
       is_upload=is_upload,
       upload_label=_('Profile picture'), url_label=_('Profile picture URL') ) }}
 
+      <br>
 
-      <div class="organization-form-groups">
-        <span class="group-label">{{ _("Organization Details")}}</span>
-        {{ form.input('organization', label=_('Organization Name'), id='field-organization', type='organization',
-        value=data.organization, error=errors.organization,
-        placeholder=_(''), classes=['control-medium'], attrs={'data-module': 'autocomplete-organization',
-        'data-module-source': '/api/3/util/organization/autocomplete?q=?', 'data-module-createtags': true,
+      <div class="institution-form-groups">
+        <span class="group-label">{{ _("Institution Details")}}</span>
+        {{ form.input('institution', label=_('Name'), id='field-institution', type='institution',
+        value=data.institution, error=errors.institution, placeholder=_('Search or provide your institution name'),
+        classes=['control-medium'], attrs={
+        'class': 'form-control',
+        'data-module': 'autocomplete-institution',
+        'data-module-source': '/api/3/util/institution/autocomplete?q=?',
+        'data-module-createtags': true,
         'data-module-key': 'name',
-        'data-module-label': 'title', 'class': ''}, is_required=true ) }}
+        'data-module-label': 'title'
+        }, is_required=true ) }}
 
-        <div class="organization-fields">
-          {{ form.input('organization_email', label=_('Email'), id='field-organization-email', type='email',
-          value=data.organization_url, error=errors.organization_url,
-          placeholder=_('eg. your_org_email@example.com'), classes=['control-medium'], attrs={'class': 'form-control'}
+        <div class="institution-fields">
+          {{ form.input('institution_email', label=_('Email'), id='field-institution-email', type='email',
+          value=data.institution_email, error=errors.institution_email,
+          placeholder=_('eg. your_institution_email@example.com'),
+          classes=['control-medium'], attrs={'class': 'form-control'}
           ) }}
 
-          {{ form.input('organization_url', label=_('Url'), id='field-organization-url', type='text', value=data.organization_email,
-          error=errors.organization_email, classes=['control-medium'], attrs={'class': 'form-control'}
+          {{ form.input('institution_url', label=_('Url'), id='field-institution-url', type='text',
+          value=data.institution_url, error=errors.institution_url, classes=['control-medium'],
+          attrs={'class': 'form-control'}
           )}}
         </div>
       </div>
