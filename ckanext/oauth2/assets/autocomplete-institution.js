@@ -273,7 +273,7 @@ this.ckan.module('autocomplete-institution', function (jQuery) {
         '</div>';
         
       if (state.hasOwnProperty('image')) {
-          $('#user-edit-form').find('.institution-fields').hide()
+        $('#user-edit-form').find('.institution-fields').hide()
       } else {
         $('#user-edit-form').find('.institution-fields').show()
       }
