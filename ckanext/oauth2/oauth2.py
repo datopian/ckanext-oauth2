@@ -21,6 +21,7 @@
 from __future__ import unicode_literals
 
 import os
+import re
 import yaml
 import base64
 import random
@@ -256,6 +257,7 @@ class OAuth2Helper(object):
                 user = model.User()
                 user.email = email
                 name = email.partition("@")[0]
+                name = re.sub(r'\W', '_', name)
                 is_name_available = model.User.check_name_available(name)
                 user.state = "pending" if profile_update_on_registration else "active"
                 user.name = (
