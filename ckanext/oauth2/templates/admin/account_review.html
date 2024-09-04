@@ -65,7 +65,7 @@
                                         <tr>
                                             <td>{{ _('Institution') }}:</td>
                                             {% if institution %}
-                                            <td><a href="{{ h.url_for('group.read', id=institution.name) }}">
+                                            <td><a href="{{ h.url_for('institution.read', id=institution.name) }}">
                                                     {{institution.title}} </a>
                                                 {% elif user.institution.name %}
                                             <td>{{ user.institution.name }} <span class="badge badge-success">New</span>
