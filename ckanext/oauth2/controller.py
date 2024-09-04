@@ -256,6 +256,9 @@ class UserProfileController(MethodView):
             if not _check_incomplete_registration(user_id):
                 raise
             data_dict = dict(tk.request.form)
+            files = dict(tk.request.files)
+            data_dict.update(files)
+            
 
             data_dict["id"] = user_id
             include_fileds = [
@@ -263,6 +266,7 @@ class UserProfileController(MethodView):
                 "fullname",
                 "email",
                 "about",
+                "image_upload",
                 "image_url",
                 "institution",
                 "institution_email",
@@ -272,6 +276,7 @@ class UserProfileController(MethodView):
             ]
             # filter out fields that are only item  in include_fileds
             data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
+            
             if not data_dict.get("fullname"):
                 raise tk.ValidationError({"fullname": [tk._("Full name is required")]})
 

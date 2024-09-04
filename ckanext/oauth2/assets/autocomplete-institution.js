@@ -272,8 +272,8 @@ this.ckan.module('autocomplete-institution', function (jQuery) {
         '<span>' + value + '</span>' +
         '</div>';
         
-      if (state.image) {
-        $('#user-edit-form').find('.institution-fields').hide()
+      if (state.hasOwnProperty('image')) {
+          $('#user-edit-form').find('.institution-fields').hide()
       } else {
         $('#user-edit-form').find('.institution-fields').show()
       }
