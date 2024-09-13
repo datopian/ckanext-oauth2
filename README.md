@@ -18,7 +18,16 @@ The OAuth2 extension allows site visitors to login through an OAuth2 server.
 
 
 # Multiple SSO 
-Add the SSO providers yaml file in  `ckan.oauth2.config_path` env.
+Configure with environment variable 
+
+``` bash
+# json or yaml
+ckan.oauth2.config_file = /ckanext/ckanext-oauth2/ckanext/oauth_config.yaml
+```
+or 
+``` bash
+ckan.oauth2.config_json =  { "providers": [ { "name": "github", "authorization_endpoint": "https://github.com/login/oauth/authorize", "token_endpoint": "https://github.com/login/oauth/access_token", "profile_api_url": "https://api.github.com/user/emails", "client_id": "your_client_id", "client_secret": "your_secret", "scope": "read:user,user:email", "profile_api_user_field": "login", "profile_api_fullname_field": "name", "profile_api_mail_field": "email" } ] }
+```
 
 Example of YAML file with list of SSO
 ``` yaml

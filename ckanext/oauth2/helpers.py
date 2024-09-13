@@ -3,7 +3,7 @@ import re
 import yaml
 import logging
 from ckan import model
-
+import json
 from ckan.plugins import toolkit
 
 from ckanext.oauth2 import db
@@ -11,16 +11,32 @@ from ckanext.oauth2 import db
 log = logging.getLogger(__name__)
 
 
+def load_oauth2_config():
+    config_file_path = toolkit.config.get("ckan.oauth2.config_file")
+    config_json = toolkit.config.get("ckan.oauth2.config_json")
+
+    if config_json:
+        return json.loads(config_json)
+    elif config_file_path:
+        file_extension = os.path.splitext(config_file_path)[1].lower()
+        with open(config_file_path) as f:
+            if file_extension == ".json":
+                return json.load(f)
+            elif file_extension in [".yaml", ".yml"]:
+                return yaml.load(f, Loader=yaml.FullLoader)
+            else:
+                raise ValueError(
+                    "Unsupported file format. Please provide a JSON or YAML file."
+                )
+    else:
+        raise ValueError(
+            "No valid configuration found. Please set either 'ckan.oauth2.config_file' or 'ckan.oauth2.config_json'."
+        )
+
+
 def get_sso_options():
-    yaml_file = toolkit.config.get(
-        "ckan.oauth2.config_path",
-        os.path.join(os.path.dirname(__file__), "..", "oauth_config.yaml"),
-    )
-    with open(yaml_file) as f:
-        oauth_cofig = yaml.load(f, Loader=yaml.FullLoader)
-        provider_list = []
-        for provider in oauth_cofig["providers"]:
-            provider_list.append(provider["name"])
+    config = load_oauth2_config()
+    provider_list = [provider["name"] for provider in config["providers"]]
     return provider_list
 
 

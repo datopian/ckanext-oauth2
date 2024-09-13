@@ -41,6 +41,7 @@ from ckan.common import login_user
 
 from ckanext.oauth2 import constants
 from ckanext.oauth2 import db
+from ckanext.oauth2.helpers import load_oauth2_config
 
 log = logging.getLogger(__name__)
 
@@ -69,37 +70,37 @@ REQUIRED_CONF = (
 class OAuth2Helper(object):
     def __init__(self, provider="github"):
         self.provider = provider
+        self.oauth_config = load_oauth2_config()
+        self.set_provider_config()
 
-        yaml_file = toolkit.config.get(
-            "ckan.oauth2.config_path",
-            os.path.join(os.path.dirname(__file__), "..", "oauth_config.yaml"),
+    def set_provider_config(self):
+        if self.oauth_config is None:
+            raise ValueError("Failed to load configuration.")
+
+        provider = list(
+            filter(
+                lambda x: x["name"].lower() == self.provider.lower(),
+                self.oauth_config["providers"],
+            )
+        )[0]
+
+        self.client_id = provider["client_id"]
+        self.client_secret = provider["client_secret"]
+        self.authorization_endpoint = provider["authorization_endpoint"]
+        self.token_endpoint = provider["token_endpoint"]
+        self.profile_api_url = provider["profile_api_url"]
+        self.profile_api_user_field = provider.get("profile_api_user_field")
+        self.profile_api_first_name_field = provider.get("profile_api_first_name_field")
+        self.profile_api_last_name_field = provider.get("profile_api_last_name_field")
+        self.profile_api_mail_field = provider["profile_api_mail_field"]
+        self.scope = "%s" % provider["scope"]
+        self.profile_api_fullname_field = provider.get(
+            "profile_api_fullname_field", None
         )
-        with open(yaml_file) as f:
-            oauth_cofig = yaml.load(f, Loader=yaml.FullLoader)
-            oauth_cofig = list(
-                filter(lambda x: x["name"].lower() == self.provider.lower(), oauth_cofig["providers"])
-            )[0]
-            self.client_id = oauth_cofig["client_id"]
-            self.client_secret = oauth_cofig["client_secret"]
-            self.authorization_endpoint = oauth_cofig["authorization_endpoint"]
-            self.token_endpoint = oauth_cofig["token_endpoint"]
-            self.profile_api_url = oauth_cofig["profile_api_url"]
-            self.profile_api_user_field = oauth_cofig.get("profile_api_user_field")
-            self.profile_api_first_name_field = oauth_cofig.get(
-                "profile_api_first_name_field"
-            )
-            self.profile_api_last_name_field = oauth_cofig.get(
-                "profile_api_last_name_field"
-            )
-            self.profile_api_mail_field = oauth_cofig["profile_api_mail_field"]
-            self.scope = "%s" % oauth_cofig["scope"]
-            self.profile_api_fullname_field = oauth_cofig.get(
-                "profile_api_fullname_field", None
-            )
-            self.profile_api_groupmembership_field = oauth_cofig.get(
-                "profile_api_groupmembership_field", None
-            )
-            self.sysadmin_group_name = oauth_cofig.get("sysadmin_group_name", None)
+        self.profile_api_groupmembership_field = provider.get(
+            "profile_api_groupmembership_field", None
+        )
+        self.sysadmin_group_name = provider.get("sysadmin_group_name", None)
 
         self.verify_https = os.environ.get("OAUTHLIB_INSECURE_TRANSPORT", "") == ""
         if self.verify_https and os.environ.get("REQUESTS_CA_BUNDLE", "").strip() != "":
@@ -212,8 +213,8 @@ class OAuth2Helper(object):
                     raise
             except Exception as e:
                 raise e
-            
-            # TODO: Remove this later on production  
+
+            # TODO: Remove this later on production
             logging.info(profile_response.json())
 
             # Token can be invalid
@@ -257,7 +258,7 @@ class OAuth2Helper(object):
                 user = model.User()
                 user.email = email
                 name = email.partition("@")[0]
-                name = re.sub(r'\W', '_', name)
+                name = re.sub(r"\W", "_", name)
                 is_name_available = model.User.check_name_available(name)
                 user.state = "pending" if profile_update_on_registration else "active"
                 user.name = (
