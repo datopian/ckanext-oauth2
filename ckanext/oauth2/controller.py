@@ -421,38 +421,42 @@ class AccountReview(MethodView):
         if action == "approve":
             try:
                 user.state = "active"
+                tk.get_action("user_update")(
+                    context, {"id": user_id, "state": "active", "email": user.email}
+                )
                 # Create an institution if not already exists
-                if not tk.h.is_institution_exist(user_extra.institution.get("name")):
+                if not user_extra.guest:
+                    if not tk.h.is_institution_exist(user_extra.institution.get("name")):
+                        log.info(
+                            "Creating institution: %s", user_extra.institution.get("name")
+                        )
+                        tk.config.get("ckan.site_url")
+
+                        institution_dict = {
+                            "name": _slugify(user_extra.institution.get("name")),
+                            "title": user_extra.institution.get("name"),
+                            "description": user_extra.institution.get("name"),
+                            "website": user_extra.institution.get("url"),
+                            "email": user_extra.institution.get("email"),
+                            "state": "active",
+                            "type": "institution",
+                        }
+
+                        tk.get_action("group_create")(context, institution_dict)
+
+                    # add user as member of the group
                     log.info(
-                        "Creating institution: %s", user_extra.institution.get("name")
+                        "Adding user to institution: %s",
+                        user_extra.institution.get("name"),
                     )
-                    tk.config.get("ckan.site_url")
-
-                    institution_dict = {
-                        "name": _slugify(user_extra.institution.get("name")),
-                        "title": user_extra.institution.get("name"),
-                        "description": user_extra.institution.get("name"),
-                        "website": user_extra.institution.get("url"),
-                        "email": user_extra.institution.get("email"),
-                        "state": "active",
-                        "type": "institution",
-                    }
-
-                    tk.get_action("group_create")(context, institution_dict)
-
-                # add user as member of the group
-                log.info(
-                    "Adding user to institution: %s",
-                    user_extra.institution.get("name"),
-                )
-                tk.get_action("group_member_create")(
-                    context,
-                    {
-                        "id": _slugify(user_extra.institution.get("name")),
-                        "username": user.name,
-                        "role": "member",
-                    },
-                )
+                    tk.get_action("group_member_create")(
+                        context,
+                        {
+                            "id": _slugify(user_extra.institution.get("name")),
+                            "username": user.name,
+                            "role": "member",
+                        },
+                    )
             except Exception as e:
                 log.error("Error approving user: %s", e)
                 tk.h.flash_error(
@@ -479,7 +483,7 @@ class AccountReview(MethodView):
         tk.h.flash_success(
             tk._('User account "{}" successfully  {}.').format(
                 user.fullname or user.email,
-                "rejected" if action == "reject" else "Approved",
+                "rejected" if action == "reject" else "approved",
             )
         )
         return tk.redirect_to("oauth2.account_review")
