@@ -16,8 +16,11 @@
         {% for user in users %}
         {% set institution = h.is_institution_exist(user.institution.name or "") %}
         <tr>
-            <td style="display: flex; justify-content: space-between;">
+            <td style="display: flex; justify-content: space-between; align-items: center;">
                 <a href="/user/{{ user.name }}">{{ user.fullname or user.email }}</a>
+                {% if user.guest %}
+                    <span class="badge badge-danger">guest</span>
+                {% endif %}
             </td>
             <td>{{user.created.isoformat()}}</td>
             <td class="hidden">{{user.state}}</td>
