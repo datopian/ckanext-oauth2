@@ -45,6 +45,7 @@ def init_db(model):
             sa.Column("expires_in", sa.types.UnicodeText),
             sa.Column("provider", sa.types.UnicodeText),
             sa.Column("institution", sa.types.JSON),
+            sa.Column("guest", sa.types.Boolean),
         )
 
         # Create the table only if it does not exist

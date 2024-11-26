@@ -46,6 +46,11 @@
       is_upload=is_upload,
       upload_label=_('Profile picture'), url_label=_('Profile picture URL') ) }}
 
+      {% call form.checkbox('guest_user', label=_('Guest User'), id='guest_user', value=True, checked=false) %}
+      {% set helper_text = _('If you want to register as a gueest user, please click on checkbox.') %}
+      {{ form.info(helper_text, classes='info-help-tight') }}
+      {% endcall %}
+
       <br>
 
       <div class="institution-form-groups">
@@ -56,10 +61,10 @@
         'class': 'form-control',
         'data-module': 'autocomplete-institution',
         'data-module-source': '/api/3/util/institution/autocomplete?q=?',
-        'data-module-createtags': true,
+        'data-module-createtags': false,
         'data-module-key': 'name',
         'data-module-label': 'title'
-        }, is_required=true ) }}
+        }, is_required=false ) }}
 
         <div class="institution-fields">
           {{ form.input('institution_email', label=_('Email'), id='field-institution-email', type='email',
