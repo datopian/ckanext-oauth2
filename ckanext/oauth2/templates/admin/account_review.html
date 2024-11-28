@@ -8,6 +8,7 @@
         <tr>
             <th>{{ _('User') }}</th>
             <th>{{ _('Registration date') }}</th>
+            <th class="hidden">{{ _('Guest') }}</th>
             <th class="hidden">{{ _('State') }}</th>
             <th>&nbsp;</th>
         </tr>
@@ -18,12 +19,10 @@
         <tr>
             <td style="display: flex; justify-content: space-between; align-items: center;">
                 <a href="/user/{{ user.name }}">{{ user.fullname or user.email }}</a>
-                {% if user.guest %}
-                    <span class="badge badge-danger">guest</span>
-                {% endif %}
             </td>
-            <td>{{user.created.isoformat()}}</td>
+            <td class="hidden">{% if user.guest %} {{ user.guest }} {% endif %}</td>
             <td class="hidden">{{user.state}}</td>
+            <td>{{user.created.isoformat()}}</td>
             <td>
                 {% if user.state in ['pending'] %}
 
