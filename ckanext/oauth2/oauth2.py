@@ -305,16 +305,20 @@ class OAuth2Helper(object):
         """
         login_user(user)
 
-    def redirect_from_callback(self):
+    def redirect_from_callback(self, username=None):
         """Redirect to the callback URL after a successful authentication."""
         state = toolkit.request.params.get("state")
         came_from = get_came_from(state)
-
         if urlparse(came_from).path == "/user/login":
-            came_from = urlunparse(
-                urlparse(came_from)._replace(path=constants.INITIAL_PAGE)
-            )
-            return toolkit.redirect_to(came_from)
+            # If the user is a guest, redirect to the dataset page instead of dashboard
+            user_extra = db.UserToken.by_user_name(user_name=username)
+            if user_extra and user_extra.guest:
+                return toolkit.redirect_to('/dataset')
+            else:
+                came_from = urlunparse(
+                    urlparse(came_from)._replace(path=constants.INITIAL_PAGE)
+                )
+                return toolkit.redirect_to(came_from)
         else:
             return came_from
 

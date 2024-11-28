@@ -111,7 +111,7 @@ def _remove_incomplete_registration_session_if_exists():
 def _login_and_redirect(oauth2helper, user, token):
     oauth2helper.login_user(user)
     oauth2helper.update_token(user.name, token)
-    return oauth2helper.redirect_from_callback()
+    return oauth2helper.redirect_from_callback(user.name)
 
 
 def callback(provider):
@@ -493,16 +493,6 @@ class UserEditView(EditView):
     def __init__(self) -> None:
         super().__init__()
 
-    def _is_registered_guest_user(self, user_name):
-        '''Check if the user is a registered guest user
-
-        Returns True if the user is a registered guest user, False otherwise
-        '''
-        user_token = db.UserToken.by_user_name(user_name=user_name)
-        is_guest = user_token.guest if user_token else False
-
-        return is_guest
-
     def post(self, id):
         # This needed to be overrided as sysadmin cannot
         # edit user without providing password
@@ -576,10 +566,6 @@ class UserEditView(EditView):
 
             resp = tk.h.redirect_to("user.read", id=user["name"])
             return resp
-        elif self._is_registered_guest_user(tk.c.userobj.name):
-            # If the user is a registered guest user, he/she should be redirected
-            # to the api_tokens route on user profile update
-            return tk.redirect_to("user.api_tokens", id=tk.c.userobj.id)
         else:
             return super().post(id)
 
