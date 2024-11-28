@@ -81,21 +81,18 @@ this.ckan.module('review-user-table', function ($) {
   };
 });
 
-$(document).ready(function () {
-  // Hide or show the institution-form-groups div based on the guest_user checkbox state
-  function toggleInstitutionFields() {
-    if ($('#guest_user').is(':checked')) {
-      $('.institution-form-groups').hide();
-    } else {
-      $('.institution-form-groups').show();
+this.ckan.module('guest-user-checkbox', function (jQuery) {
+  return {
+    initialize: function () {
+      var el = this.el;
+      var institutionEl = jQuery('.input-institution');
+      el.change(function () {
+        if (el.is(':checked')) {
+          institutionEl.hide();
+        } else {
+          institutionEl.show();
+        }
+      });
     }
-  }
-
-  // Initial check on page load
-  toggleInstitutionFields();
-
-  // Add event listener for the guest_user checkbox
-  $('#guest_user').change(function () {
-    toggleInstitutionFields();
-  });
+  };
 });
