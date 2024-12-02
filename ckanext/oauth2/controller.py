@@ -111,7 +111,7 @@ def _remove_incomplete_registration_session_if_exists():
 def _login_and_redirect(oauth2helper, user, token):
     oauth2helper.login_user(user)
     oauth2helper.update_token(user.name, token)
-    return oauth2helper.redirect_from_callback()
+    return oauth2helper.redirect_from_callback(user.name)
 
 
 def callback(provider):
@@ -252,12 +252,15 @@ class UserProfileController(MethodView):
 
     def post(self, user_id):
         context = self._prepare()
+        log.debug("Executing post method for user_id: %s", user_id)
         try:
             if not _check_incomplete_registration(user_id):
                 raise
             data_dict = dict(tk.request.form)
             files = dict(tk.request.files)
             data_dict.update(files)
+
+            log.debug("Form data received: %s", data_dict)
 
             data_dict["id"] = user_id
             include_fileds = [
@@ -267,6 +270,7 @@ class UserProfileController(MethodView):
                 "about",
                 "image_upload",
                 "image_url",
+                "guest_user",
                 "institution",
                 "institution_email",
                 "institution_url",
@@ -278,7 +282,7 @@ class UserProfileController(MethodView):
             if not data_dict.get("fullname"):
                 raise tk.ValidationError({"fullname": [tk._("Full name is required")]})
 
-            if not data_dict.get("institution"):
+            if not data_dict.get("guest_user") and not data_dict.get("institution"):
                 raise tk.ValidationError(
                     {"institution": [tk._("institution name is required")]}
                 )
@@ -287,14 +291,12 @@ class UserProfileController(MethodView):
 
             # Add user user token table, which means the user has completed profile update process
             user_token = db.UserToken.by_user_name(user_name=user_dict.get("name"))
+            
             if not user_token:
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
-                user_token.institution = {
-                    "name": data_dict.get("institution", ""),
-                    "email": data_dict.get("institution_email", ""),
-                    "url": data_dict.get("institution_url", ""),
-                }
+                user_token.institution = data_dict.get("institution", "")
+                user_token.guest = tk.asbool(data_dict.get("guest_user", False))
                 model.Session.add(user_token)
                 model.Session.commit()
 
@@ -381,6 +383,7 @@ class AccountReview(MethodView):
                 model.User.about,
                 model.User.created,
                 db.UserToken.institution,
+                db.UserToken.guest,
             )
             .outerjoin(db.UserToken, model.User.name == db.UserToken.user_name)
             .filter(
@@ -414,38 +417,42 @@ class AccountReview(MethodView):
         if action == "approve":
             try:
                 user.state = "active"
+                tk.get_action("user_update")(
+                    context, {"id": user_id, "state": "active", "email": user.email}
+                )
                 # Create an institution if not already exists
-                if not tk.h.is_institution_exist(user_extra.institution.get("name")):
+                if not user_extra.guest:
+                    if not tk.h.is_institution_exist(user_extra.institution.get("name")):
+                        log.info(
+                            "Creating institution: %s", user_extra.institution.get("name")
+                        )
+                        tk.config.get("ckan.site_url")
+
+                        institution_dict = {
+                            "name": _slugify(user_extra.institution.get("name")),
+                            "title": user_extra.institution.get("name"),
+                            "description": user_extra.institution.get("name"),
+                            "website": user_extra.institution.get("url"),
+                            "email": user_extra.institution.get("email"),
+                            "state": "active",
+                            "type": "institution",
+                        }
+
+                        tk.get_action("group_create")(context, institution_dict)
+
+                    # add user as member of the group
                     log.info(
-                        "Creating institution: %s", user_extra.institution.get("name")
+                        "Adding user to institution: %s",
+                        user_extra.institution.get("name"),
                     )
-                    tk.config.get("ckan.site_url")
-
-                    institution_dict = {
-                        "name": _slugify(user_extra.institution.get("name")),
-                        "title": user_extra.institution.get("name"),
-                        "description": user_extra.institution.get("name"),
-                        "website": user_extra.institution.get("url"),
-                        "email": user_extra.institution.get("email"),
-                        "state": "active",
-                        "type": "institution",
-                    }
-
-                    tk.get_action("group_create")(context, institution_dict)
-
-                # add user as member of the group
-                log.info(
-                    "Adding user to institution: %s",
-                    user_extra.institution.get("name"),
-                )
-                tk.get_action("group_member_create")(
-                    context,
-                    {
-                        "id": _slugify(user_extra.institution.get("name")),
-                        "username": user.name,
-                        "role": "member",
-                    },
-                )
+                    tk.get_action("group_member_create")(
+                        context,
+                        {
+                            "id": _slugify(user_extra.institution.get("name")),
+                            "username": user.name,
+                            "role": "member",
+                        },
+                    )
             except Exception as e:
                 log.error("Error approving user: %s", e)
                 tk.h.flash_error(
@@ -472,7 +479,7 @@ class AccountReview(MethodView):
         tk.h.flash_success(
             tk._('User account "{}" successfully  {}.').format(
                 user.fullname or user.email,
-                "rejected" if action == "reject" else "Approved",
+                "rejected" if action == "reject" else "approved",
             )
         )
         return tk.redirect_to("oauth2.account_review")
@@ -552,6 +559,7 @@ class UserEditView(EditView):
                 return self.get(id, data_dict, errors, error_summary)
 
             tk.h.flash_success(tk._("Profile updated"))
+
             resp = tk.h.redirect_to("user.read", id=user["name"])
             return resp
         else:

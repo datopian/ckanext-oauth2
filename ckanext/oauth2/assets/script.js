@@ -45,15 +45,24 @@ this.ckan.module('review-user-table', function ($) {
             targets: 0, // The index of the user column
             width: "45%",
             render: function (data, type, row, meta) {
-              if (row[2] === 'pending') {
-                return `${data}&nbsp;<span class="badge badge-warning">${row[2]}</span>`;
-              } else if (row[2] === 'approved') {
-                return `${data}&nbsp;<span class="badge badge-success">${row[2]}</span>`;
-              } else if (row[2] === 'rejected') {
-                return `${data}&nbsp;<span class="badge badge-danger">${row[2]}</span>`;
-              } else {
-                return `${data}&nbsp;<span class="badge badge-success">${row[2]}</span>`;
+              let value = `${data}`;
+              if (row[1] === 'True') {
+                value += `<div><span class="badge badge-danger">Guest</span> &nbsp;`;
               }
+              let badgeClass = 'badge-success';
+              switch (row[2]) {
+                case 'pending':
+                  badgeClass = 'badge-warning';
+                  break;
+                case 'approved':
+                  badgeClass = 'badge-success';
+                  break;
+                case 'rejected':
+                  badgeClass = 'badge-danger';
+                  break;
+              }
+              value += `<span class="badge ${badgeClass}">${row[2]}</span></div>`;
+              return value;
             }
           },
           {
@@ -77,6 +86,22 @@ this.ckan.module('review-user-table', function ($) {
       // Add a header with the total number of users and subscribed members
       var totalUsers = table.rows().count();
       table.column(0).header().textContent = 'User (' + totalUsers + ')';
+    }
+  };
+});
+
+this.ckan.module('guest-user-checkbox', function (jQuery) {
+  return {
+    initialize: function () {
+      var el = this.el;
+      var institutionEl = jQuery('.input-institution');
+      el.change(function () {
+        if (el.is(':checked')) {
+          institutionEl.hide();
+        } else {
+          institutionEl.show();
+        }
+      });
     }
   };
 });
