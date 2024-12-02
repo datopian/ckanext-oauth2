@@ -295,11 +295,7 @@ class UserProfileController(MethodView):
             if not user_token:
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
-                user_token.institution = {
-                    "name": data_dict.get("institution", ""),
-                    "email": data_dict.get("institution_email", ""),
-                    "url": data_dict.get("institution_url", ""),
-                }
+                user_token.institution = data_dict.get("institution", "")
                 user_token.guest = tk.asbool(data_dict.get("guest_user", False))
                 model.Session.add(user_token)
                 model.Session.commit()

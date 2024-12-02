@@ -44,7 +44,7 @@ def init_db(model):
             sa.Column("refresh_token", sa.types.UnicodeText),
             sa.Column("expires_in", sa.types.UnicodeText),
             sa.Column("provider", sa.types.UnicodeText),
-            sa.Column("institution", sa.types.JSON),
+            sa.Column("institution", sa.types.UnicodeText),
             sa.Column("guest", sa.types.Boolean),
         )
 
