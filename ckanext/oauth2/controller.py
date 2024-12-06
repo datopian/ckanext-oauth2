@@ -272,20 +272,25 @@ class UserProfileController(MethodView):
                 "image_url",
                 "guest_user",
                 "institution",
-                "institution_email",
-                "institution_url",
                 "clear_upload",
                 "save",
             ]
             # filter out fields that are only item  in include_fileds
             data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
+            errors = {}
+
             if not data_dict.get("fullname"):
-                raise tk.ValidationError({"fullname": [tk._("Full name is required")]})
+                errors["fullname"] = [tk._("Full name is required")]
 
             if not data_dict.get("guest_user") and not data_dict.get("institution"):
-                raise tk.ValidationError(
-                    {"institution": [tk._("institution name is required")]}
-                )
+                errors["institution"] = [tk._("Institution name is required")]
+
+            if not data_dict.get("email"):
+                errors["email"] = [tk._("Email is required")]
+
+            if errors:
+                raise tk.ValidationError(errors)
+            
             data_dict["state"] = "pending"
             user_dict = tk.get_action("user_update")(context, data_dict)
 
@@ -408,9 +413,6 @@ class AccountReview(MethodView):
         action = tk.request.form.get("action")
         message = tk.request.form.get("message")
         user = model.User.get(user_id)
-
-        user_extra = db.UserToken.by_user_name(user_name=user.name)
-
         if not user:
             tk.abort(404, tk._("User not found"))
 
@@ -420,39 +422,6 @@ class AccountReview(MethodView):
                 tk.get_action("user_update")(
                     context, {"id": user_id, "state": "active", "email": user.email}
                 )
-                # Create an institution if not already exists
-                if not user_extra.guest:
-                    if not tk.h.is_institution_exist(user_extra.institution.get("name")):
-                        log.info(
-                            "Creating institution: %s", user_extra.institution.get("name")
-                        )
-                        tk.config.get("ckan.site_url")
-
-                        institution_dict = {
-                            "name": _slugify(user_extra.institution.get("name")),
-                            "title": user_extra.institution.get("name"),
-                            "description": user_extra.institution.get("name"),
-                            "website": user_extra.institution.get("url"),
-                            "email": user_extra.institution.get("email"),
-                            "state": "active",
-                            "type": "institution",
-                        }
-
-                        tk.get_action("group_create")(context, institution_dict)
-
-                    # add user as member of the group
-                    log.info(
-                        "Adding user to institution: %s",
-                        user_extra.institution.get("name"),
-                    )
-                    tk.get_action("group_member_create")(
-                        context,
-                        {
-                            "id": _slugify(user_extra.institution.get("name")),
-                            "username": user.name,
-                            "role": "member",
-                        },
-                    )
             except Exception as e:
                 log.error("Error approving user: %s", e)
                 tk.h.flash_error(
