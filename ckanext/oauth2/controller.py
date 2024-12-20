@@ -34,7 +34,7 @@ from ckan.views.user import EditView
 from ckan.views.api import _finish_ok
 import ckan.logic as logic
 import ckan.lib.navl.dictization_functions as dictization_functions
-from sqlalchemy import or_
+from sqlalchemy import or_, and_, case, select
 
 from ckan.common import session
 import ckan.lib.helpers as helpers
@@ -290,13 +290,13 @@ class UserProfileController(MethodView):
 
             if errors:
                 raise tk.ValidationError(errors)
-            
+
             data_dict["state"] = "pending"
             user_dict = tk.get_action("user_update")(context, data_dict)
 
             # Add user user token table, which means the user has completed profile update process
             user_token = db.UserToken.by_user_name(user_name=user_dict.get("name"))
-            
+
             if not user_token:
                 user_token = db.UserToken()
                 user_token.user_name = user_dict.get("name")
@@ -539,26 +539,60 @@ def _reset_redirect():
     return tk.abort(404, tk._("Not found"))
 
 
+
+
 def institution_autocomplete():
-    q = tk.request.args.get("q", "")
+    query = tk.request.args.get("q", "")
     limit = tk.request.args.get("limit", 20)
-    q = model.Session.query(model.Group).filter(
+
+    title_nb_subquery = (
+        select([model.GroupExtra.value])
+        .where(
+            and_(
+                model.GroupExtra.group_id == model.Group.id,
+                model.GroupExtra.key == "title_nb",
+                model.GroupExtra.value.ilike(f"%{query}%"),
+            )
+        )
+        .limit(1)
+        .as_scalar()
+    )
+
+    title_nb_case = case(
+        [(title_nb_subquery != None, title_nb_subquery)],
+        else_=model.Group.title,
+    )
+
+    q = model.Session.query(
+        model.Group.id,
+        model.Group.name,
+        title_nb_case.label("title"),
+        model.Group.image_url,
+    ).filter(
         or_(
-            model.Group.name.contains(q),
-            model.Group.title.ilike("%" + q + "%"),
+            model.Group.name.contains(query),
+            model.Group.title.ilike("%" + query + "%"),
+            model.Group.extras.any(
+                and_(
+                    model.GroupExtra.key == "title_nb",
+                    model.GroupExtra.value.ilike(f"%{query}%"),
+                )
+            ),
         )
     )
     q = q.filter(model.Group.type == "institution")
     q = q.filter(model.Group.state == "active")
-    q.order_by(model.Group.title)
-
+    q = q.order_by(model.Group.title)
     q = q.limit(limit)
 
     group_list = []
     for group in q.all():
-        result_dict = {}
-        for k in ["id", "name", "title", "image_url"]:
-            result_dict[k] = getattr(group, k)
+        result_dict = {
+            "id": group.id,
+            "name": group.name,
+            "title": group.title,
+            "image_url": group.image_url,
+        }
         group_list.append(result_dict)
 
     return _finish_ok(group_list)
