@@ -256,28 +256,33 @@ class UserProfileController(MethodView):
         try:
             if not _check_incomplete_registration(user_id):
                 raise
-            data_dict = dict(tk.request.form)
-            files = dict(tk.request.files)
-            data_dict.update(files)
+
+            data_dict = logic.clean_dict(
+                dictization_functions.unflatten(
+                    logic.tuplize_dict(logic.parse_params(tk.request.form))
+                )
+            )
+            data_dict.update(
+                logic.clean_dict(
+                    dictization_functions.unflatten(
+                        logic.tuplize_dict(logic.parse_params(tk.request.files))
+                    )
+                )
+            )
 
             log.debug("Form data received: %s", data_dict)
 
-            data_dict["id"] = user_id
-            include_fileds = [
-                "id",
-                "fullname",
-                "email",
-                "about",
-                "image_upload",
-                "image_url",
-                "guest_user",
-                "institution",
-                "clear_upload",
-                "save",
-            ]
             # filter out fields that are only item  in include_fileds
-            data_dict = {k: v for k, v in data_dict.items() if k in include_fileds}
             errors = {}
+            user_dict = {
+                "id": user_id,
+                **{
+                    key: value
+                    for key, value in data_dict.items()
+                    if key not in {"institution", "guest_user"}
+                },
+            }
+            print(user_dict)
 
             if not data_dict.get("fullname"):
                 errors["fullname"] = [tk._("Full name is required")]
@@ -292,6 +297,7 @@ class UserProfileController(MethodView):
                 raise tk.ValidationError(errors)
 
             data_dict["state"] = "pending"
+            data_dict["id"] = user_id
             user_dict = tk.get_action("user_update")(context, data_dict)
 
             # Add user user token table, which means the user has completed profile update process
@@ -462,83 +468,65 @@ class UserEditView(EditView):
         # This needed to be overrided as sysadmin cannot
         # edit user without providing password
         context, id = self._prepare(id)
-        if tk.c.userobj.sysadmin:
-            if not context["save"]:
-                return self.get(id)
+        if not context["save"]:
+            return self.get(id)
 
-            try:
-                data_dict = logic.clean_dict(
+        try:
+            data_dict = logic.clean_dict(
+                dictization_functions.unflatten(
+                    logic.tuplize_dict(logic.parse_params(tk.request.form))
+                )
+            )
+            data_dict.update(
+                logic.clean_dict(
                     dictization_functions.unflatten(
-                        logic.tuplize_dict(logic.parse_params(tk.request.form))
+                        logic.tuplize_dict(logic.parse_params(tk.request.files))
                     )
                 )
-                data_dict.update(
-                    logic.clean_dict(
-                        dictization_functions.unflatten(
-                            logic.tuplize_dict(logic.parse_params(tk.request.files))
-                        )
-                    )
-                )
+            )
 
-            except dictization_functions.DataError:
-                tk.abort(400, tk._("Integrity Error"))
-            data_dict.setdefault("activity_streams_email_notifications", False)
+        except dictization_functions.DataError:
+            tk.abort(400, tk._("Integrity Error"))
+        data_dict.setdefault("activity_streams_email_notifications", False)
 
-            data_dict["id"] = id
-            # deleted user can be reactivated by sysadmin on WEB-UI
-            is_deleted = False
-            if tk.asbool(data_dict.get("activate_user", False)):
-                user_dict = logic.get_action("user_show")(context, {"id": id})
-                # set the flag so if validation error happens we will
-                # change back the user state to deleted
-                is_deleted = user_dict.get("state") == "deleted"
-                # if activate_user is checked, change the user's state to active
-                data_dict["state"] = "active"
-                # pop the value as we don't want to send it for
-                # validation on user_update
-                data_dict.pop("activate_user")
-            # we need this comparison when sysadmin edits a user,
-            # this will return True
-            # and we can utilize it for later use.
+        data_dict["id"] = id
+        # deleted user can be reactivated by sysadmin on WEB-UI
+        is_deleted = False
+        if tk.asbool(data_dict.get("activate_user", False)):
+            user_dict = logic.get_action("user_show")(context, {"id": id})
+            # set the flag so if validation error happens we will
+            # change back the user state to deleted
+            is_deleted = user_dict.get("state") == "deleted"
+            # if activate_user is checked, change the user's state to active
+            data_dict["state"] = "active"
+            # pop the value as we don't want to send it for
+            # validation on user_update
+            data_dict.pop("activate_user")
 
-            # common users can edit their own profiles without providing
-            # password, but if they want to change
-            # their old password with new one... old password must be provided..
-            # so we are checking here if password1
-            # and password2 are filled so we can enter the validation process.
-            # when sysadmins edits a user he MUST provide sysadmin password.
-            # We are recognizing sysadmin user
-            # by email_changed variable.. this returns True
-            # and we are entering the validation.
+        try:
+            user = logic.get_action("user_update")(context, data_dict)
+        except tk.NotAuthorized:
+            tk.abort(403, tk._("Unauthorized to edit user %s") % id)
+        except tk.ObjectNotFound:
+            tk.abort(404, tk._("User not found"))
+        except tk.ValidationError as e:
+            errors = e.error_dict
+            error_summary = e.error_summary
+            # the user state was deleted, we are trying to reactivate it but
+            # validation error happens so we want to change back the state
+            # to deleted, as it was before
+            if is_deleted and data_dict.get("state") == "active":
+                data_dict["state"] = "deleted"
+            return self.get(id, data_dict, errors, error_summary)
 
-            try:
-                user = logic.get_action("user_update")(context, data_dict)
-            except tk.NotAuthorized:
-                tk.abort(403, tk._("Unauthorized to edit user %s") % id)
-            except tk.ObjectNotFound:
-                tk.abort(404, tk._("User not found"))
-            except tk.ValidationError as e:
-                errors = e.error_dict
-                error_summary = e.error_summary
-                # the user state was deleted, we are trying to reactivate it but
-                # validation error happens so we want to change back the state
-                # to deleted, as it was before
-                if is_deleted and data_dict.get("state") == "active":
-                    data_dict["state"] = "deleted"
-                return self.get(id, data_dict, errors, error_summary)
+        tk.h.flash_success(tk._("Profile updated"))
 
-            tk.h.flash_success(tk._("Profile updated"))
-
-            resp = tk.h.redirect_to("user.read", id=user["name"])
-            return resp
-        else:
-            return super().post(id)
+        resp = tk.h.redirect_to("user.read", id=user["name"])
+        return resp
 
 
 def _reset_redirect():
     return tk.abort(404, tk._("Not found"))
-
-
 
 
 def institution_autocomplete():
