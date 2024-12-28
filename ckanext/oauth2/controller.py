@@ -282,7 +282,6 @@ class UserProfileController(MethodView):
                     if key not in {"institution", "guest_user"}
                 },
             }
-            print(user_dict)
 
             if not data_dict.get("fullname"):
                 errors["fullname"] = [tk._("Full name is required")]
@@ -292,6 +291,20 @@ class UserProfileController(MethodView):
 
             if not data_dict.get("email"):
                 errors["email"] = [tk._("Email is required")]
+
+                            
+            # Validate account already exists with that email address
+            if data_dict.get("email"):
+                user = model.Session.query(model.User).filter(
+                    model.User.email == data_dict.get("email"),
+                    model.User.state.in_(["active", "pending"])
+                ).first()
+                
+                if user:
+                    if user.state == "active":
+                        errors["email"] = [tk._("Account already exists with this email address")]
+                    elif user.state == "pending":
+                        errors["email"] = [tk._("Another account already exists with this email address and is pending for approval")]
 
             if errors:
                 raise tk.ValidationError(errors)
