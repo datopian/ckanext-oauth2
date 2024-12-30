@@ -43,7 +43,7 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IAuthenticator, inherit=True)
     plugins.implements(plugins.IBlueprint)
     plugins.implements(plugins.IConfigurer)
-    # plugins.implements(plugins.IMiddleware, inherit=True)
+    plugins.implements(plugins.IMiddleware, inherit=True)
 
     def __init__(self, name=None):
         log.debug("Initializing the OAuth2 plugin")
@@ -135,6 +135,7 @@ class OAuth2Plugin(plugins.SingletonPlugin):
 
     # IMiddleware
     def make_middleware(self, app, config):
+
         def check_account_state(response):
             def _allowed_endpoint(endpoint):
                 allowed_endpoints = [
@@ -176,5 +177,6 @@ class OAuth2Plugin(plugins.SingletonPlugin):
                             response.status_code = 302
                             return response
             return response
+
         app.after_request(check_account_state)
         return app

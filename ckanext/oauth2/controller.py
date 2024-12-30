@@ -100,21 +100,13 @@ def callback(provider):
     try:
         token = oauth2helper.get_token()
         user = oauth2helper.identify(token)
-        account_state = (
-            user.plugin_extras.get("account_state") if user.plugin_extras else None
-        )
 
         if user.state == "rejected":
-            helpers.flash_error(tk._("Your account has been rejected"))
+            helpers.flash_error(tk._("Your account has been rejected."))
             return tk.redirect_to("/")
+
         oauth2helper.login_user(user)
         oauth2helper.update_token(user.name, token)
-        if account_state == "incomplete":
-            tk.h.flash_notice(tk._("Please complete your account setup."))
-            return tk.redirect_to("oauth2.account_update")
-        if account_state == "pending":
-            return tk.redirect_to("oauth2.account_pending")
-
         return oauth2helper.redirect_from_callback()
 
     except Exception as e:
@@ -302,11 +294,10 @@ class UserProfileController(MethodView):
                 "institution": data_dict.get("institution", ""),
             }
 
-            data_dict["state"] = "pending"
             data_dict["id"] = user.id
             data_dict.pop("guest_user", None)
             data_dict.pop("institution", None)
-            data_dict["plugin_extras"] = {"account_status": "pending"}
+            data_dict["plugin_extras"] = {"account_state": "pending"}
             user_dict = tk.get_action("user_update")(context, data_dict)
 
             # Update user extras fields
@@ -336,8 +327,8 @@ def account_pending():
 
         # Check if user is pending with the plugin_extras
         if user.plugin_extras:
-            account_status = user.plugin_extras.get("account_state", False)
-            if account_status != "pending":
+            account_state = user.plugin_extras.get("account_state", False)
+            if account_state != "pending":
                 return tk.abort(404, tk._("Not found"))
 
         extra_vars = {
@@ -422,12 +413,14 @@ class AccountReview(MethodView):
             .all()
         )
 
-        print(users)
-
         users = [
             dict(
                 zip(user.keys(), user),
-                state=user.plugin_extras.get("account_state", user.state),
+                state=(
+                    user.plugin_extras.get("account_state", user.state)
+                    if user.plugin_extras
+                    else user.state
+                ),
             )
             for user in users
         ]
