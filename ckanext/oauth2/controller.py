@@ -34,8 +34,8 @@ from ckan.views.user import EditView
 from ckan.views.api import _finish_ok
 import ckan.logic as logic
 import ckan.lib.navl.dictization_functions as dictization_functions
-from sqlalchemy import or_, and_, case, select
-
+from sqlalchemy import cast, or_, and_, case, select
+from sqlalchemy.dialects.postgresql import JSONB
 from ckan.common import session
 import ckan.lib.helpers as helpers
 import ckan.plugins.toolkit as tk
@@ -92,28 +92,6 @@ def login(provider):
     return tk.redirect_to(auth_url)
 
 
-def __set_incomplete_registration_session(user):
-    session["incomplete_registration"] = user.id
-
-
-def _check_incomplete_registration(user_id):
-    user = session.get("incomplete_registration", None)
-    if user == user_id:
-        return True
-    return False
-
-
-def _remove_incomplete_registration_session_if_exists():
-    if "incomplete_registration" in session:
-        session.pop("incomplete_registration", None)
-
-
-def _login_and_redirect(oauth2helper, user, token):
-    oauth2helper.login_user(user)
-    oauth2helper.update_token(user.name, token)
-    return oauth2helper.redirect_from_callback(user.name)
-
-
 def callback(provider):
     from ckanext.oauth2 import oauth2
 
@@ -122,34 +100,22 @@ def callback(provider):
     try:
         token = oauth2helper.get_token()
         user = oauth2helper.identify(token)
+        account_state = (
+            user.plugin_extras.get("account_state") if user.plugin_extras else None
+        )
 
-        if tk.config.get(
-            "ckanext.oauth2.profile_update_on_registration", False
-        ) and not oauth2helper.get_stored_token(user.name):
-            __set_incomplete_registration_session(user)
-            return tk.redirect_to("oauth2.profile_update", user_id=user.id)
+        if user.state == "rejected":
+            helpers.flash_error(tk._("Your account has been rejected"))
+            return tk.redirect_to("/")
+        oauth2helper.login_user(user)
+        oauth2helper.update_token(user.name, token)
+        if account_state == "incomplete":
+            tk.h.flash_notice(tk._("Please complete your account setup."))
+            return tk.redirect_to("oauth2.account_update")
+        if account_state == "pending":
+            return tk.redirect_to("oauth2.account_pending")
 
-        if (
-            tk.config.get("ckanext.oauth2.account_approval", False)
-            and user.state == "pending"
-        ):
-            return tk.render(
-                "user/account_pending.html",
-                extra_vars={"user": user, "hide_masterhead": True},
-            )
-
-        if (
-            tk.config.get("ckanext.oauth2.account_approval", False)
-            and user.state == "rejected"
-        ):
-            helpers.flash_error(
-                "Your account is reviewed and rejected. If you have any questions about your account, please contact the site administrator"
-            )
-            return tk.redirect_to("user.login")
-
-        session["login_provider"] = provider
-        _remove_incomplete_registration_session_if_exists()
-        return _login_and_redirect(oauth2helper, user, token)
+        return oauth2helper.redirect_from_callback()
 
     except Exception as e:
         session.save()
@@ -208,8 +174,7 @@ class UserProfileController(MethodView):
             log.error("Error sending email: %s", e)
             tk.h.flash_error(tk._("Failed to send email to admin users"))
 
-    def _mail_user(self, user_id):
-        user = model.User.get(user_id)
+    def _mail_user(self, user):
 
         extra_vars = {
             "site_url": tk.config.get("ckan.site_url"),
@@ -231,112 +196,128 @@ class UserProfileController(MethodView):
             log.error("Error sending email: %s", e)
             tk.h.flash_error(tk._("Failed to send email to user"))
 
-    def get(self, user_id):
-        context = self._prepare()
+    def _get_cleaned_data_dict(self):
+        data_dict = logic.clean_dict(
+            dictization_functions.unflatten(
+                logic.tuplize_dict(logic.parse_params(tk.request.form))
+            )
+        )
+        data_dict.update(
+            logic.clean_dict(
+                dictization_functions.unflatten(
+                    logic.tuplize_dict(logic.parse_params(tk.request.files))
+                )
+            )
+        )
+        return data_dict
+
+    def _validate_data(self, data_dict, user):
+        errors = {}
+
+        if not data_dict.get("fullname"):
+            errors["fullname"] = [tk._("Full name is required")]
+
+        if not data_dict.get("guest_user") and not data_dict.get("institution"):
+            errors["institution"] = [tk._("Institution name is required")]
+
+        if not data_dict.get("email"):
+            errors["email"] = [tk._("Email is required")]
+
+        if data_dict.get("email"):
+            existing_user = (
+                model.Session.query(model.User)
+                .filter(
+                    model.User.email == data_dict.get("email"),
+                    model.User.state.in_(["active", "pending", "incomplete"]),
+                )
+                .first()
+            )
+
+            if existing_user:
+                if existing_user.state == "active" and existing_user.id != user.id:
+                    errors["email"] = [
+                        tk._("Account already exists with this email address")
+                    ]
+                elif existing_user.state == "pending" and existing_user.id != user.id:
+                    errors["email"] = [
+                        tk._(
+                            "Another account already exists with this email address and is pending for approval"
+                        )
+                    ]
+
+        return errors
+
+    def _update_user_token(self, data_dict):
+        user_token = db.UserToken.by_user_name(user_name=data_dict.get("name"))
+        if not user_token:
+            user_token = db.UserToken(user_name=data_dict.get("name"))
+        else:
+            user_token.institution = data_dict.get("institution", "")
+            user_token.guest = tk.asbool(data_dict.get("guest_user", False))
+
+        model.Session.add(user_token)
+        model.Session.commit()
+
+    def get(self):
         try:
-            if not _check_incomplete_registration(user_id):
-                raise
-            data_dict = {"id": user_id}
-            user = tk.get_action("user_show")(context, data_dict)
+            if not tk.current_user.is_authenticated:
+                tk.abort(401, tk._("Unauthorized to visit this page"))
+
+            user = model.User.get(tk.current_user.id)
+            user_token = db.UserToken.by_user_name(user_name=user.get("name"))
 
             extra_vars = {
-                "data": user,
+                "data": {
+                    "fullname": user.fullname,
+                    "email": user.email,
+                    "institution": user_token.institution if user_token else "",
+                },
                 "errors": {},
                 "error_summary": {},
                 "hide_masterhead": True,
             }
 
-            return tk.render("user/profie_update.html", extra_vars=extra_vars)
+            return tk.render("user/account_update.html", extra_vars=extra_vars)
         except Exception as e:
-            return tk.abort(404, "User not found")
+            log.error("Error updating user profile: %s", e)
+            return tk.abort(500, tk._("Error updating user profile"))
 
-    def post(self, user_id):
+    def post(self):
         context = self._prepare()
-        log.debug("Executing post method for user_id: %s", user_id)
+
+        if not tk.current_user.is_authenticated:
+            tk.abort(401, tk._("Unauthorized to visit this page"))
+
+        user = model.User.get(tk.current_user.id)
+
         try:
-            if not _check_incomplete_registration(user_id):
-                raise
-
-            data_dict = logic.clean_dict(
-                dictization_functions.unflatten(
-                    logic.tuplize_dict(logic.parse_params(tk.request.form))
-                )
-            )
-            data_dict.update(
-                logic.clean_dict(
-                    dictization_functions.unflatten(
-                        logic.tuplize_dict(logic.parse_params(tk.request.files))
-                    )
-                )
-            )
-
-            log.debug("Form data received: %s", data_dict)
-
-            # filter out fields that are only item  in include_fileds
-            errors = {}
-            user_dict = {
-                "id": user_id,
-                **{
-                    key: value
-                    for key, value in data_dict.items()
-                    if key not in {"institution", "guest_user"}
-                },
-            }
-
-            if not data_dict.get("fullname"):
-                errors["fullname"] = [tk._("Full name is required")]
-
-            if not data_dict.get("guest_user") and not data_dict.get("institution"):
-                errors["institution"] = [tk._("Institution name is required")]
-
-            if not data_dict.get("email"):
-                errors["email"] = [tk._("Email is required")]
-
-                            
-            # Validate account already exists with that email address
-            if data_dict.get("email"):
-                user = model.Session.query(model.User).filter(
-                    model.User.email == data_dict.get("email"),
-                    model.User.state.in_(["active", "pending"])
-                ).first()
-                
-                if user:
-                    if user.state == "active":
-                        errors["email"] = [tk._("Account already exists with this email address")]
-                    elif user.state == "pending":
-                        errors["email"] = [tk._("Another account already exists with this email address and is pending for approval")]
-
+            data_dict = self._get_cleaned_data_dict()
+            errors = self._validate_data(data_dict, user)
             if errors:
                 raise tk.ValidationError(errors)
 
+            user_token_dict = {
+                "name": user.name,
+                "guest_user": tk.asbool(data_dict.get("guest_user", False)),
+                "institution": data_dict.get("institution", ""),
+            }
+
             data_dict["state"] = "pending"
-            data_dict["id"] = user_id
+            data_dict["id"] = user.id
+            data_dict.pop("guest_user", None)
+            data_dict.pop("institution", None)
+            data_dict["plugin_extras"] = {"account_status": "pending"}
             user_dict = tk.get_action("user_update")(context, data_dict)
 
-            # Add user user token table, which means the user has completed profile update process
-            user_token = db.UserToken.by_user_name(user_name=user_dict.get("name"))
+            # Update user extras fields
+            self._update_user_token(user_token_dict)
 
-            if not user_token:
-                user_token = db.UserToken()
-                user_token.user_name = user_dict.get("name")
-                user_token.institution = data_dict.get("institution", "")
-                user_token.guest = tk.asbool(data_dict.get("guest_user", False))
-                model.Session.add(user_token)
-                model.Session.commit()
-
-            # Now remove the incomplete registration session also
-            # as the user has completed the profile update process already
-            _remove_incomplete_registration_session_if_exists()
-
-            self._mail_user(user_dict.get("id"))
-
+            # Send email to user and admin
+            # self._mail_user(user)
             thread = threading.Thread(target=self._mail_admins, args=(user_dict,))
             thread.start()
 
-            return tk.render(
-                "user/account_pending.html",
-                extra_vars={"user": user_dict, "hide_masterhead": True},
-            )
+            return tk.redirect_to("oauth2.account_pending")
 
         except tk.ValidationError as e:
             errors = e.error_dict
@@ -346,7 +327,25 @@ class UserProfileController(MethodView):
                 "errors": errors,
                 "error_summary": error_summary,
             }
-            return tk.render("user/profie_update.html", extra_vars=extra_vars)
+            return tk.render("user/account_update.html", extra_vars=extra_vars)
+
+
+def account_pending():
+    if tk.current_user.is_authenticated:
+        user = model.User.get(tk.current_user.id)
+
+        # Check if user is pending with the plugin_extras
+        if user.plugin_extras:
+            account_status = user.plugin_extras.get("account_state", False)
+            if account_status != "pending":
+                return tk.abort(404, tk._("Not found"))
+
+        extra_vars = {
+            "user_id": user.id,
+            "user_dict": user.as_dict(),
+            "account_pending": True,
+        }
+        return tk.render("user/account_pending.html", extra_vars=extra_vars)
 
 
 class AccountReview(MethodView):
@@ -408,16 +407,30 @@ class AccountReview(MethodView):
                 model.User.created,
                 db.UserToken.institution,
                 db.UserToken.guest,
+                model.User.plugin_extras,
             )
             .outerjoin(db.UserToken, model.User.name == db.UserToken.user_name)
             .filter(
-                model.User.state.in_(["pending", "rejected", "active"]),
+                or_(
+                    cast(model.User.plugin_extras, JSONB)["account_state"].astext.in_(
+                        ["pending", "incomplete"]
+                    ),
+                    model.User.state == "rejected",
+                )
             )
             .order_by(model.User.created)
             .all()
         )
 
-        users = [dict(zip(user.keys(), user)) for user in users]
+        print(users)
+
+        users = [
+            dict(
+                zip(user.keys(), user),
+                state=user.plugin_extras.get("account_state", user.state),
+            )
+            for user in users
+        ]
 
         extra_vars = {
             "users": users,
@@ -438,9 +451,9 @@ class AccountReview(MethodView):
         if action == "approve":
             try:
                 user.state = "active"
-                tk.get_action("user_update")(
-                    context, {"id": user_id, "state": "active", "email": user.email}
-                )
+                user.plugin_extras = None
+                model.Session.add(user)
+                model.Session.commit()
             except Exception as e:
                 log.error("Error approving user: %s", e)
                 tk.h.flash_error(
@@ -452,11 +465,10 @@ class AccountReview(MethodView):
             self._mail_user(user, type="approve")
         elif action == "reject":
             user.state = "rejected"
+            user.plugin_extras = None
+            model.Session.add(user)
+            model.Session.commit()
             self._mail_user(user, type="reject", message=message)
-
-            tk.get_action("user_update")(
-                context, {"id": user_id, "state": "rejected", "email": user.email}
-            )
 
             # Delete user token if exists to allow user to register again
             user_token = db.UserToken.by_user_name(user_name=user.name)
@@ -610,14 +622,16 @@ oauth2.add_url_rule(
 )
 
 oauth2.add_url_rule(
-    "/user/edit/profile/<user_id>",
-    view_func=UserProfileController.as_view(str("profile_update")),
+    "/user/account/udpate",
+    view_func=UserProfileController.as_view(str("account_update")),
 )
+
+oauth2.add_url_rule("/user/account/pending", view_func=account_pending, methods=["GET"])
+
 
 oauth2.add_url_rule(
     "/admin/account_review", view_func=AccountReview.as_view("account_review")
 )
-
 
 _edit_view = UserEditView.as_view(str("edit"))
 

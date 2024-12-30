@@ -43,6 +43,7 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IAuthenticator, inherit=True)
     plugins.implements(plugins.IBlueprint)
     plugins.implements(plugins.IConfigurer)
+    # plugins.implements(plugins.IMiddleware, inherit=True)
 
     def __init__(self, name=None):
         log.debug("Initializing the OAuth2 plugin")
@@ -131,3 +132,49 @@ class OAuth2Plugin(plugins.SingletonPlugin):
             "CKAN_OAUTH2_AUTHORIZATION_HEADER",
             config.get("ckan.oauth2.authorization_header", "Authorization"),
         ).lower()
+
+    # IMiddleware
+    def make_middleware(self, app, config):
+        def check_account_state(response):
+            def _allowed_endpoint(endpoint):
+                allowed_endpoints = [
+                    "static",
+                    "oauth2.account_update",
+                    "user.login",
+                    "user.logout",
+                    "webassets.index",
+                    "_debug_toolbar.static",
+                    "util.internal_redirect",
+                    "api.i18n_js_translations",
+                    "oauth2.institution_autocomplete",
+                    "oauth2.account_pending",
+                ]
+                return endpoint in allowed_endpoints
+
+            if toolkit.current_user.is_authenticated:
+                user = model.User.get(toolkit.current_user.name)
+                account_state = (
+                    user.plugin_extras.get("account_state")
+                    if user.plugin_extras
+                    else None
+                )
+                if account_state in ["incomplete", "pending"]:
+                    if not _allowed_endpoint(toolkit.request.endpoint):
+                        if account_state == "incomplete":
+                            toolkit.h.flash_notice(
+                                toolkit._("Please complete your account setup.")
+                            )
+                            response.headers["Location"] = toolkit.url_for(
+                                "oauth2.account_update"
+                            )
+                            response.status_code = 302
+                            return response
+                        elif account_state == "pending":
+                            response.headers["Location"] = toolkit.url_for(
+                                "oauth2.account_pending"
+                            )
+                            response.status_code = 302
+                            return response
+            return response
+        app.after_request(check_account_state)
+        return app
