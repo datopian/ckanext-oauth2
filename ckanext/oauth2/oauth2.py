@@ -241,9 +241,6 @@ class OAuth2Helper(object):
             email = [e["email"] for e in user_data if e["primary"] == True][0]
         else:
             email = user_data.get(self.profile_api_mail_field)
-        profile_update_on_registration = toolkit.config.get(
-            "ckanext.oauth2.profile_update_on_registration", False
-        )
         # In CKAN can exists more than one user associated with the same email
         # Some providers, like Google and FIWARE only allows one account per email
         user = None
@@ -260,7 +257,8 @@ class OAuth2Helper(object):
                 name = email.partition("@")[0]
                 name = re.sub(r"\W", "_", name)
                 is_name_available = model.User.check_name_available(name)
-                user.state = "pending" if profile_update_on_registration else "active"
+                user.plugin_extras = {"account_state": "incomplete"}
+                user.state = "active"
                 user.name = (
                     name if is_name_available else name + "%s" % random.randint(10, 20)
                 )
@@ -276,7 +274,8 @@ class OAuth2Helper(object):
             else:
                 user = model.User()
                 user.email = None
-                user.state = "pending" if profile_update_on_registration else "active"
+                user.state = "active"
+                user.plugin_extras = {"account_state": "incomplete"}
                 is_name_available = model.User.check_name_available(user_id_or_name)
                 user.name = user_id_or_name
 
@@ -313,7 +312,7 @@ class OAuth2Helper(object):
             # If the user is a guest, redirect to the dataset page instead of dashboard
             user_extra = db.UserToken.by_user_name(user_name=username)
             if user_extra and user_extra.guest:
-                return toolkit.redirect_to('/dataset')
+                return toolkit.redirect_to("/dataset")
             else:
                 came_from = urlunparse(
                     urlparse(came_from)._replace(path=constants.INITIAL_PAGE)
