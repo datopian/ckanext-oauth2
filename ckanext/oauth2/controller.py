@@ -304,7 +304,7 @@ class UserProfileController(MethodView):
             self._update_user_token(user_token_dict)
 
             # Send email to user and admin
-            # self._mail_user(user)
+            self._mail_user(user)
             thread = threading.Thread(target=self._mail_admins, args=(user_dict,))
             thread.start()
 
