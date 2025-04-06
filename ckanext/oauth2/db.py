@@ -1,50 +1,48 @@
-# -*- coding: utf-8 -*-
+import logging
 
-# Copyright (c) 2014 CoNWeT Lab., Universidad Politécnica de Madrid
+log = logging.getLogger(__name__)
 
-# This file is part of OAuth2 CKAN Extension.
+from typing import Optional
+from typing_extensions import Self
+from sqlalchemy import Column, Text
+from sqlalchemy.ext.declarative import declarative_base
+from ckan.model import meta
+import logging
 
-# OAuth2 CKAN Extension is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+log = logging.getLogger(__name__)
 
-# OAuth2 CKAN Extension is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+Base = declarative_base()
 
-# You should have received a copy of the GNU Affero General Public License
-# along with OAuth2 CKAN Extension.  If not, see <http://www.gnu.org/licenses/>.
+class UserToken(Base):
+    __tablename__ = "user_token"
 
-import sqlalchemy as sa
-
-UserToken = None
-
-
-def init_db(model):
-
-    global UserToken
-    if UserToken is None:
-
-        class _UserToken(model.DomainObject):
-
-            @classmethod
-            def by_user_name(cls, user_name):
-                return model.Session.query(cls).filter_by(user_name=user_name).first()
-
-        UserToken = _UserToken
-
-        user_token_table = sa.Table('user_token', model.meta.metadata,
-            sa.Column('user_name', sa.types.UnicodeText, primary_key=True),
-            sa.Column('access_token', sa.types.UnicodeText),
-            sa.Column('token_type', sa.types.UnicodeText),
-            sa.Column('refresh_token', sa.types.UnicodeText),
-            sa.Column('expires_in', sa.types.UnicodeText),
-            sa.Column('provider', sa.types.UnicodeText)
-        )
-
-        # Create the table only if it does not exist
-        user_token_table.create(checkfirst=True)
-
-        model.meta.mapper(UserToken, user_token_table)
+    user_name = Column(Text, primary_key=True)
+    access_token = Column(Text, nullable=True)
+    token_type = Column(Text, nullable=True)
+    refresh_token = Column(Text, nullable=True)
+    expires_in = Column(Text, nullable=True)
+    provider = Column(Text, nullable=True)
+    
+    def __init__(
+            self, 
+            user_name: str = '', 
+            access_token: Optional[str] = None,
+            token_type: Optional[str] = None,
+            refresh_token: Optional[str] = None,
+            expires_in: Optional[str] = None,
+            provider: Optional[str] = None
+    ) -> None:
+        self.user_name = user_name
+        self.access_token = access_token
+        self.token_type = token_type
+        self.refresh_token = refresh_token
+        self.expires_in = expires_in
+        self.provider = provider
+    
+    @classmethod
+    def by_user_name(cls, user_name: str) -> Optional[Self]:
+        if not user_name:
+            return None
+        
+        log.info(f'User name that we are querying is {user_name}')
+        return meta.Session.query(cls).filter(cls.user_name == user_name).first()

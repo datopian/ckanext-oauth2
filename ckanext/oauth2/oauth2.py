@@ -37,9 +37,10 @@ from base64 import b64encode, b64decode
 import ckan.model as model
 from ckan.plugins import toolkit
 from ckan.common import login_user
+from ckan import model
 
 from ckanext.oauth2 import constants
-from ckanext.oauth2 import db
+from ckanext.oauth2.db import UserToken
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ class OAuth2Helper(object):
             "ckan.oauth2.config_path",
             os.path.join(os.path.dirname(__file__), "..", "oauth_config.yaml"),
         )
+
         with open(yaml_file) as f:
             oauth_cofig = yaml.load(f, Loader=yaml.FullLoader)
             oauth_cofig = list(
@@ -295,7 +297,7 @@ class OAuth2Helper(object):
             return came_from
 
     def get_stored_token(self, user_name):
-        user_token = db.UserToken.by_user_name(user_name=user_name)
+        user_token = UserToken.by_user_name(user_name=user_name)
         if user_token:
             return {
                 "access_token": user_token.access_token,
@@ -305,11 +307,14 @@ class OAuth2Helper(object):
             }
 
     def update_token(self, user_name, token):
-        user_token = db.UserToken.by_user_name(user_name=user_name)
+        user_token = UserToken.by_user_name(user_name)
+    
+       
         # Create the user if it does not exist
         if not user_token:
-            user_token = db.UserToken()
+            user_token = UserToken()
             user_token.user_name = user_name
+            
         # Save the new token
         user_token.access_token = token["access_token"]
         user_token.token_type = token["token_type"]

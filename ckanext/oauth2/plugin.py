@@ -64,8 +64,8 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IConfigurer)
 
     def __init__(self, name=None):
+        self.name = name
         log.debug("Initializing the OAuth2 plugin")
-        db.init_db(model)
 
     # ITemplateHelpers
     def get_helpers(self):
