@@ -79,9 +79,13 @@ def callback(provider):
     oauth2helper = oauth2.OAuth2Helper(provider)
 
     try:
+        log.info('===== get_token() is invoked')
         token = oauth2helper.get_token()
+        log.info('===== identify() is invoked')
         user = oauth2helper.identify(token)
+        log.info('===== login_user() is invoked')
         oauth2helper.login_user(user)
+        log.info('===== update_token() is invoked')
         oauth2helper.update_token(user.name, token)
 
         return oauth2helper.redirect_from_callback()
