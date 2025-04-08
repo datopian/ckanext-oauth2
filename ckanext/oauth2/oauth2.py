@@ -157,6 +157,8 @@ class OAuth2Helper(object):
         }
 
         if self.legacy_idm:
+            log.info('\tlegacy_idm is called')
+
             # This is only required for Keyrock v6 and v5
             headers["Authorization"] = "Basic %s" % base64.urlsafe_b64encode(
                 "%s:%s" % (self.client_id, self.client_secret)
@@ -170,13 +172,16 @@ class OAuth2Helper(object):
                 authorization_response=toolkit.request.url,
                 verify=self.verify_https,
             )
+            log.info('\t get_token is called ok')
         except requests.exceptions.SSLError as e:
             # TODO search a better way to detect invalid certificates
             if "verify failed" in six.text_type(e):
+                log.info(f'\t insecure error in get_token {str(e)}')
                 raise InsecureTransportError()
             else:
                 raise
         except Exception as e:
+            log.info(f'\t error in fetch_token {str(e)}')
             raise e
         return token
 
@@ -188,18 +193,24 @@ class OAuth2Helper(object):
         else:
             try:
                 if self.legacy_idm:
+                    log.info('\tlegacy_idm is called identify')
+
                     profile_response = requests.get(
                         self.profile_api_url
                         + "?access_token=%s" % token["access_token"],
                         verify=True,
                     )
+                    
                 else:
                     oauth = OAuth2Session(self.client_id, token=token)
+                    log.info('\tbefore profile_response is called identify')
                     profile_response = oauth.get(self.profile_api_url, verify=True)
 
             except requests.exceptions.SSLError as e:
                 # TODO search a better way to detect invalid certificates
                 if "verify failed" in six.text_type(e):
+                    log.info(f'\t insecure error {str(e)} in identify')
+
                     raise InsecureTransportError()
                 else:
                     raise
