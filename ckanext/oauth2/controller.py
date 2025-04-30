@@ -140,12 +140,12 @@ oauth2.add_url_rule("/oauth2/<provider>/callback", "callback", view_func=callbac
 oauth2.add_url_rule(
     "/user/register", "redirect", view_func=register_redirect, methods=["GET"]
 )
-oauth2.add_url_rule(
-    "/user/reset", "redirect", view_func=register_redirect, methods=["GET"]
-)
-oauth2.add_url_rule(
-    "/user/edit/<user>", "redirect", view_func=register_redirect, methods=["GET"]
-)
+#oauth2.add_url_rule(
+#    "/user/reset", "redirect", view_func=register_redirect, methods=["GET"]
+#)
+#oauth2.add_url_rule(
+#    "/user/edit/<user>", "redirect", view_func=register_redirect, methods=["GET"]
+#)
 
 
 def get_blueprint():

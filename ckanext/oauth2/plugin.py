@@ -78,7 +78,6 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         return controller.get_blueprint()
 
     def identify(self):
-        log.debug("Identifying the user")
 
         def _refresh_and_save_token(user_name):
             user = db.UserToken.by_user_name(user_name=user_name)
@@ -128,7 +127,6 @@ class OAuth2Plugin(plugins.SingletonPlugin):
             toolkit.c.usertoken_refresh = partial(_refresh_and_save_token, user_name)
         else:
             g.user = None
-            log.warn("The user is currently not logged in.")
 
     def update_config(self, config):
         # Update our configuration
