@@ -22,9 +22,6 @@ import re
 
 from setuptools import setup, find_packages
 
-from ckanext.oauth2 import __version__, __description__
-
-
 PYPI_RST_FILTERS = (
     # Remove travis ci badge
     (r'.*travis-ci\.org/.*', ''),
@@ -56,8 +53,6 @@ def rst(filename):
 
 setup(
     name='ckanext-oauth2',
-    version=__version__,
-    description=__description__,
     long_description='''
     The OAuth2 extension allows site visitors to login through an OAuth2 server.
     ''',
@@ -65,7 +60,6 @@ setup(
     author='Aitor Magán',
     author_email='amagan@conwet.com',
     url='https://github.com/conwetlab/ckanext-oauth2',
-    download_url='https://github.com/conwetlab/ckanext-oauth2/tarball/v' + __version__,
     license='',
     packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
     namespace_packages=['ckanext'],
