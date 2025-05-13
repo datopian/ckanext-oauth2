@@ -36,6 +36,7 @@ from ckanext.oauth2 import controller
 
 log = logging.getLogger(__name__)
 
+
 def _get_sso_options():
     yaml_file = toolkit.config.get(
         "ckan.oauth2.config_path",

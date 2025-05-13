@@ -2,11 +2,17 @@
 
 {% block form %}
 {{ super() }}
-<h2> Login SSO: </h2> <hr>
+{% block login_button %}
+    <div class="d-flex align-items-center text-muted my-3">
+        <hr class="flex-grow-1">
+            <span class="px-2">or</span>
+        <hr class="flex-grow-1">
+    </div>
+    {% for provider in h.sso_login_options() %}
+        <a href="{{ h.url_for('oauth2.login', provider=provider) }}" class="btn btn-primary btn-block">
+            <i class="fa-brands fa-{{ provider }}"></i> {{ _('Login with %(provider)s', provider=provider | capitalize) }}
+        </a>
+        {% endfor %}
+{% endblock %}
 
-{% for provider in h.sso_login_options() %}
-    <a href="{{ h.url_for('oauth2.login', provider=provider) }}" class="btn btn-primary btn-block">
-        <i class="fa fa-{{ provider }}"></i> {{ _('Login with %(provider)s', provider=provider) }}
-    </a>
-    {% endfor %}
 {% endblock %}

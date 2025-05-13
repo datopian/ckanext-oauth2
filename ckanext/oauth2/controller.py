@@ -22,29 +22,31 @@ from __future__ import unicode_literals
 
 import logging
 
-from flask import Blueprint, redirect
+from flask import Blueprint
 from urllib.parse import urlparse
 
 from ckan.common import session
 import ckan.lib.helpers as helpers
-import ckan.plugins.toolkit as toolkit
+import ckan.plugins.toolkit as tk
 from ckanext.oauth2 import constants
-import os
+
+oauth2 = Blueprint("oauth2", __name__)
+
 log = logging.getLogger(__name__)
 
 
 def _get_previous_page(default_page):
-    if "came_from" not in toolkit.request.params:
-        came_from_url = toolkit.request.headers.get("Referer", default_page)
+    if "came_from" not in tk.request.params:
+        came_from_url = tk.request.headers.get("Referer", default_page)
     else:
-        came_from_url = toolkit.request.params.get("came_from", default_page)
+        came_from_url = tk.request.params.get("came_from", default_page)
 
     came_from_url_parsed = urlparse(came_from_url)
 
     # Avoid redirecting users to external hosts
     if (
         came_from_url_parsed.netloc != ""
-        and came_from_url_parsed.netloc != toolkit.request.host
+        and came_from_url_parsed.netloc != tk.request.host
     ):
         came_from_url = default_page
 
@@ -69,8 +71,7 @@ def login(provider):
     oauth2helper = oauth2.OAuth2Helper(provider)
     came_from_url = _get_previous_page(constants.INITIAL_PAGE)
     auth_url = oauth2helper.challenge(came_from_url)
-    return toolkit.redirect_to(auth_url)
-
+    return tk.redirect_to(auth_url)
 
 
 def callback(provider):
@@ -79,73 +80,42 @@ def callback(provider):
     oauth2helper = oauth2.OAuth2Helper(provider)
 
     try:
-        log.info('===== get_token() is invoked')
         token = oauth2helper.get_token()
-        log.info('===== identify() is invoked')
         user = oauth2helper.identify(token)
-        log.info('===== login_user() is invoked')
+
+        if user.state == "rejected":
+            helpers.flash_error(tk._("Your account has been rejected."))
+            return tk.redirect_to("/")
+
         oauth2helper.login_user(user)
-        log.info('===== update_token() is invoked')
         oauth2helper.update_token(user.name, token)
-
         return oauth2helper.redirect_from_callback()
+
     except Exception as e:
-        log.info("============================")
-        log.info(e)
-        # session.save()
+        log.error("Error in OAuth2 callback: %s" % e)
+        error_description = tk.request.args.get("error_description", None)
+        if not error_description:
+            for attr in ["message", "description", "error"]:
+                if hasattr(e, attr) and getattr(e, attr):
+                    error_description = getattr(e, attr)
+                    break
+            else:
+                error_description = type(e).__name__
 
-        # If the callback is called with an error, we must show the message
-        error_description = toolkit.request.args.get("error_description", None)
-
-
-        # if not error_description:
-        #     if e._message:
-        #         error_description = e._message
-        #     elif hasattr(e, "description") and e.description:
-        #         error_description = e.description
-        #     elif hasattr(e, "error") and e.error:
-        #         error_description = e.error
-        #     else:
-        #         error_description = type(e).__name__
-
-        log.info(f'{error_description}')
-
-        redirect_url = oauth2.get_came_from(toolkit.request.params.get("state"))
+        redirect_url = oauth2.get_came_from(tk.request.params.get("state"))
         redirect_url = "/" if redirect_url == constants.INITIAL_PAGE else redirect_url
-
+        log.error("Error in OAuth2 callback: %s" % e)
         helpers.flash_error(error_description)
-        return toolkit.redirect_to('/user/_logout')
-
-oauth2 = Blueprint("oauth2", __name__)
+        return tk.redirect_to(redirect_url)
 
 
-def register_redirect():
-    register_url = toolkit.config.get("ckanext.oauth2.register_url", None)
-    return redirect(register_url)
-
-
-def reset_redirect():
-    reset_url = toolkit.config.get("ckanext.oauth2.reset_url", None)
-    return redirect(reset_url)
-
-
-def edit_redirect(user):
-    edit_url = toolkit.config.get("ckanext.oauth2.edit_url", None)
-    return redirect(edit_url.format(user=user))
-
-
-oauth2.add_url_rule("/oauth2/login/<provider>", "login", view_func=login, methods=["GET"])
-
-oauth2.add_url_rule("/oauth2/<provider>/callback", "callback", view_func=callback, methods=["GET"])
 oauth2.add_url_rule(
-    "/user/register", "redirect", view_func=register_redirect, methods=["GET"]
+    "/oauth2/login/<provider>", "login", view_func=login, methods=["GET"]
 )
-#oauth2.add_url_rule(
-#    "/user/reset", "redirect", view_func=register_redirect, methods=["GET"]
-#)
-#oauth2.add_url_rule(
-#    "/user/edit/<user>", "redirect", view_func=register_redirect, methods=["GET"]
-#)
+
+oauth2.add_url_rule(
+    "/oauth2/<provider>/callback", "callback", view_func=callback, methods=["GET"]
+)
 
 
 def get_blueprint():
