@@ -82,11 +82,6 @@ def callback(provider):
     try:
         token = oauth2helper.get_token()
         user = oauth2helper.identify(token)
-
-        if user.state == "rejected":
-            helpers.flash_error(tk._("Your account has been rejected."))
-            return tk.redirect_to("/")
-
         oauth2helper.login_user(user)
         oauth2helper.update_token(user.name, token)
         return oauth2helper.redirect_from_callback()

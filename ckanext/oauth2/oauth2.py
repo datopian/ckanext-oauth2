@@ -305,7 +305,7 @@ class OAuth2Helper(object):
             )
             return toolkit.redirect_to(came_from)
         else:
-            return came_from
+            return toolkit.redirect_to(came_from)
 
     def get_stored_token(self, user_name):
         user_token = UserToken.by_user_name(user_name=user_name)
