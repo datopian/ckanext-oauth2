@@ -93,6 +93,7 @@ class OAuth2Helper(object):
                 "profile_api_groupmembership_field", None
             )
             self.sysadmin_group_name = oauth_cofig.get("sysadmin_group_name", None)
+            self.prompt = oauth_cofig.get("prompt", "consent")
 
         self.verify_https = os.environ.get("OAUTHLIB_INSECURE_TRANSPORT", "") == ""
         if self.verify_https and os.environ.get("REQUESTS_CA_BUNDLE", "").strip() != "":
@@ -140,7 +141,7 @@ class OAuth2Helper(object):
             state=state,
         )
         auth_url, _ = oauth.authorization_url(
-            self.authorization_endpoint, prompt="consent"
+            self.authorization_endpoint, prompt=self.prompt
         )
         log.debug("Challenge: Redirecting challenge to page {0}".format(auth_url))
         return auth_url
