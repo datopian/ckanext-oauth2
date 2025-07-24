@@ -162,6 +162,7 @@ class OAuth2Helper(object):
                     profile_response.raise_for_status()
             else:
                 user_data = profile_response.json()
+                log.info("==============profile data=====================", user_data)
                 user = self.user_json(user_data)
 
         # Save the user in the database
