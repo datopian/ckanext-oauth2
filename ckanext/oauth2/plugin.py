@@ -165,10 +165,13 @@ class OAuth2Plugin(plugins.SingletonPlugin):
                             toolkit.h.flash_notice(
                                 toolkit._("Please complete your account setup.")
                             )
-                            response.headers["Location"] = toolkit.url_for(
-                                "oauth2.account_update"
-                            )
-                            response.status_code = 302
+                            if toolkit.request.endpoint == "approval_dataset.download_resource":
+                                return  response
+                            else:
+                                response.headers["Location"] = toolkit.url_for(
+                                    "oauth2.account_update"
+                                )
+                                response.status_code = 302
                             return response
                         elif account_state == "pending":
                             if toolkit.request.endpoint == "approval_dataset.download_resource":
