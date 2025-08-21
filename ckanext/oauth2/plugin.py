@@ -171,7 +171,7 @@ class OAuth2Plugin(plugins.SingletonPlugin):
                             response.status_code = 302
                             return response
                         elif account_state == "pending":
-                            if toolkit.request.blueprint == "approval_dataset.download_resource":
+                            if toolkit.request.endpoint == "approval_dataset.download_resource":
                                 return  response
                             else:
                                 toolkit.h.flash_notice(
