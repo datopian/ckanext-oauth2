@@ -171,10 +171,17 @@ class OAuth2Plugin(plugins.SingletonPlugin):
                             response.status_code = 302
                             return response
                         elif account_state == "pending":
-                            response.headers["Location"] = toolkit.url_for(
-                                "oauth2.account_pending"
-                            )
-                            response.status_code = 302
+                            if toolkit.request.blueprint == "approval_dataset.download_resource":
+                                return  response
+                            else:
+                                toolkit.h.flash_notice(
+                                    toolkit._("Your account is pending approval.")
+                                )
+                              
+                                response.headers["Location"] = toolkit.url_for(
+                                    "oauth2.account_pending"
+                                )
+                                response.status_code = 302
                             return response
             return response
 
