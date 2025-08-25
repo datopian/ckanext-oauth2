@@ -13,6 +13,9 @@ log = logging.getLogger(__name__)
 
 Base = declarative_base()
 
+def sanitize_username(username: str) -> str:
+    new_user = username.lower().replace(".", "_")
+    return new_user
 
 class UserToken(Base):
     __tablename__ = "user_token"
@@ -46,4 +49,8 @@ class UserToken(Base):
             return None
 
         log.info(f"User name that we are querying is {user_name}")
-        return meta.Session.query(cls).filter(cls.user_name == user_name).first()
+        user = meta.Session.query(cls).filter(cls.user_name == user_name).first()
+        if user:
+            log.info(f"User {user_name} found")
+            return user
+        return meta.Session.query(cls).filter(cls.user_name == sanitize_username(user_name)).first()

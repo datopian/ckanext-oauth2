@@ -264,6 +264,7 @@ class OAuth2Helper(object):
                 if is_username_availabe
                 else user_name + "%s" % random.randint(10, 20)
             )
+            user.name = user.name.lower().replace(".", "_")
 
         # Now we update his/her user_name with the one provided by the OAuth2 service
         # In the future, users will be obtained based on this field
