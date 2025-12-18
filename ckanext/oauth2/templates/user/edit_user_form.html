@@ -1,5 +1,6 @@
 {% import 'macros/form.html' as form %}
-
+{% set show_email_notifications = h.get_config_value("ckan.activity_streams_email_notifications") == True %}
+ 
 <form id="user-edit-form" class="dataset-form" method="post" action="{{ action }}">
   {{ form.errors(error_summary) }}
 
@@ -16,7 +17,7 @@
     {% if show_email_notifications %}
       {% call form.checkbox('activity_streams_email_notifications', label=_('Subscribe to notification emails'), id='field-activity-streams-email-notifications', value=True, checked=g.userobj.activity_streams_email_notifications) %}
       {% set helper_text = _("You will receive notification emails from {site_title}, e.g. when you have new activities on your dashboard."|string) %}
-      {{ form.info(helper_text.format(site_title=g.site_title), classes=['info-help-tight']) }}
+      {{ form.info(helper_text.format(site_title=g.site_title)) }}
       {% endcall %}
     {% endif %}
   </fieldset>
