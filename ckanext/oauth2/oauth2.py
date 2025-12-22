@@ -245,7 +245,7 @@ class OAuth2Helper(object):
         # Some providers, like Google and FIWARE only allows one account per email
         user = None
         if email:
-            existing_user = model.User.by_email(email)
+            existing_user = model.User.by_email(email.lower())
             if existing_user:
                 existing_user.state = (
                     "active" if existing_user.state == "active" else existing_user.state
@@ -253,7 +253,7 @@ class OAuth2Helper(object):
                 user = existing_user
             else:
                 user = model.User()
-                user.email = email
+                user.email = email.lower()
                 name = email.partition("@")[0]
                 name = re.sub(r"\W", "_", name)
                 is_name_available = model.User.check_name_available(name)
