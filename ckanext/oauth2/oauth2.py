@@ -257,6 +257,7 @@ class OAuth2Helper(object):
         # If the user does not exist, we have to create it...
         if not user:
             user = model.User(email=email)
+            user.activity_streams_email_notifications = True
             # if user name is already exists, add a random string to the end
             is_username_availabe = model.User.check_name_available(user_name)
             user.name = (
