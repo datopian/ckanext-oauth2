@@ -127,7 +127,6 @@ class OAuth2PluginTest(unittest.TestCase):
         self.controller.callback()
 
         # Check the state and the location
-        controller.session.save.assert_called_once_with()
         self.assertEquals(RETURNED_STATUS, controller.toolkit.response.status_int)
         self.assertEquals(came_from, controller.toolkit.response.location)
         controller.helpers.flash_error.assert_called_once_with(expected_flash)

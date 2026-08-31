@@ -93,15 +93,76 @@ this.ckan.module('review-user-table', function ($) {
 this.ckan.module('guest-user-checkbox', function (jQuery) {
   return {
     initialize: function () {
-      var el = this.el;
-      var institutionEl = jQuery('.input-institution');
-      el.change(function () {
-        if (el.is(':checked')) {
-          institutionEl.hide();
-        } else {
-          institutionEl.show();
+      var ERROR_CLASS = 'institution-choice__error';
+
+      function field() {
+        return jQuery('#field-institution');
+      }
+
+      function isGuest() {
+        return jQuery('#affiliation-guest').is(':checked');
+      }
+
+      function clearError() {
+        jQuery('.' + ERROR_CLASS).remove();
+        jQuery('.institution-choice__field').removeClass('has-error');
+      }
+
+      function showError(message) {
+        clearError();
+        jQuery('.institution-choice__field')
+          .addClass('has-error')
+          .append('<span class="' + ERROR_CLASS + '"></span>')
+          .find('.' + ERROR_CLASS)
+          .text(message);
+      }
+
+      function sync() {
+        var guest = isGuest();
+
+        jQuery('.institution-choice__field').toggle(!guest);
+        jQuery('#guest_user').val(guest ? 'True' : '');
+
+        // Never set `required` here: select2 hides the real input, and the
+        // browser skips constraint validation on hidden fields - the submit
+        // button would just die silently. Validated on submit instead.
+        field().removeAttr('required');
+
+        if (guest) {
+          clearError();
+          // Drop any stale selection so a guest never submits an institution.
+          if (field().data('select2')) {
+            field().select2('val', '');
+          } else {
+            field().val('');
+          }
         }
+      }
+
+      jQuery('input[name="affiliation"]').on('change', function () {
+        clearError();
+        sync();
       });
+
+      field().on('change', clearError);
+
+      // Block submit with a visible message when an institution is required
+      // but not chosen. The server enforces this too; this is just so the
+      // user sees it next to the field.
+      jQuery('#user-edit-form').on('submit', function (event) {
+        if (!isGuest() && !jQuery.trim(field().val() || '')) {
+          event.preventDefault();
+          showError(this.getAttribute('data-institution-required')
+            || 'Please select your institution.');
+          jQuery('#s2id_field-institution').find('.select2-choice').focus();
+          return false;
+        }
+        clearError();
+      });
+
+      // Apply on load too: a returning guest arrives with the guest radio
+      // already selected, and change alone never fires for them.
+      sync();
     }
   };
 });

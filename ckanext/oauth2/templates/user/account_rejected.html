@@ -1,0 +1,53 @@
+{% extends "page.html" %}
+
+{% block subtitle %}{{ _("Account not approved") }}{% endblock %}
+
+{% block breadcrumb_content %}{% endblock %}
+
+{% block wrapper_class %} account-status-wrapper{% endblock %}
+
+{#
+  Terminal status page for a rejected request, styled like account_pending.
+  The reason the administrator gave is only sent by email (it is not stored
+  on the user), so this page points there rather than inventing one.
+#}
+{% block flash %}{% endblock %}
+
+{% block primary_content %}
+<article class="module">
+  <div class="module-content">
+    {% block primary_content_inner %}
+    <div class="account-pending account-pending--rejected">
+
+      <span class="account-pending__icon" aria-hidden="true">
+        <i class="fa fa-times-circle"></i>
+      </span>
+
+      <h1 class="account-pending__title">{{ _('Your request was not approved') }}</h1>
+
+      <p class="account-pending__lead">
+        {% trans %}An administrator has reviewed your account and decided not
+        to approve access to the archive at this time.{% endtrans %}
+      </p>
+
+      <p class="account-pending__email">
+        {{ _('The reason was sent to the email address.') }}
+      </p>
+
+      <p class="account-pending__help">
+        {% if contact_email %}
+          {% trans email=contact_email %}If you think this was a mistake, please
+          contact the archive administrator at
+          <a href="mailto:{{ email }}">{{ email }}</a>.{% endtrans %}
+        {% else %}
+          {{ _('If you think this was a mistake, please contact the archive administrator.') }}
+        {% endif %}
+      </p>
+
+    </div>
+    {% endblock %}
+  </div>
+</article>
+{% endblock %}
+
+{% block secondary %}{% endblock %}

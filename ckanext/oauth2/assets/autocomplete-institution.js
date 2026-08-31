@@ -24,6 +24,7 @@ this.ckan.module('autocomplete-institution', function (jQuery) {
       createtags: true,
       key: false,
       label: false,
+      initialLabel: '',
       items: 10,
       source: null,
       tokensep: ',',
@@ -327,6 +328,10 @@ this.ckan.module('autocomplete-institution', function (jQuery) {
 
       if (this.options.tags) {
         formatted = jQuery.map(value.split(","), this.formatTerm);
+      } else if (value && this.options.initialLabel) {
+        // The stored value is an id (e.g. a ROR id); show the readable title
+        // the server resolved for it instead of the raw id.
+        formatted = { id: value, text: this.options.initialLabel };
       } else {
         formatted = this.formatTerm(value);
       }

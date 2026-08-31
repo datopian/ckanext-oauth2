@@ -1,35 +1,55 @@
 {% ckan_extends %}
 
 {% block primary_content %}
-<div class="sso-container">
-    <h1 class="page-heading sso-heading ">{% block page_heading %}{{ _('Login') }}{% endblock %}</h1>
+<article class="module">
+  <div class="module-content">
+    <div class="sso-container">
+      <h1 class="page-heading sso-heading">{% block page_heading %}{{ _('Log in') }}{% endblock %}</h1>
 
-    {% block form %}
-    {% for provider in h.sso_login_options() %}
-    <a href="{{ h.url_for('oauth2.login', provider=provider | lower) }}" class="btn btn-primary btn-block sso-item">
-        {% if provider in  ['Feide', 'Dataporten'] %}
-        <svg class="padding-" xmlns="http://www.w3.org/2000/svg" id="Layer_1" viewBox="0 0 45 45" width="20" height="20"> <defs> <style> .cls-1 { fill: #FFF; } </style> </defs> <title>Horisontal_Feide</title> <rect class="cls-1" x="27.99" y="20.34" width="4.24" height="10.18" /> <polygon class="cls-1" points="18.23 23.31 13.99 23.31 13.99 34.76 4.24 34.76 4.24 20.34 0 20.34 0 35.61 0.02 35.61 0.02 39 32.23 39 32.23 34.76 18.23 34.76 18.23 23.31" /> <circle class="cls-1" cx="16.11" cy="16.53" r="2.54" /> <path class="cls-1" d="M16.11,4.24A11.87,11.87,0,0,1,28,16.1h4.25A16.11,16.11,0,0,0,0,16.1H4.25A11.87,11.87,0,0,1,16.11,4.24Z" /> </svg>
-        {% else %}
-        <i class="fa-brands fa-{{ provider.lower() }}"></i>
-        {% endif %}
-        {{ _('Login with %(provider)s', provider=provider) }}
-    </a>
+      <p class="sso-intro">
+        {% trans %}Use your institutional or ORCID account to sign in. If you
+        don't have an account yet, signing in creates one.{% endtrans %}
+      </p>
 
-    {% endfor %}
-</div>
+      {% block form %}
+      <div class="sso-options">
+        {% for provider in h.sso_login_options() %}
+        <a href="{{ h.url_for('oauth2.login', provider=provider | lower) }}"
+           class="btn btn-primary btn-block sso-item">
+          {% if provider in ['Feide', 'Dataporten'] %}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45" width="20" height="20" aria-hidden="true" focusable="false"><defs><style>.cls-1 { fill: #FFF; }</style></defs><rect class="cls-1" x="27.99" y="20.34" width="4.24" height="10.18" /><polygon class="cls-1" points="18.23 23.31 13.99 23.31 13.99 34.76 4.24 34.76 4.24 20.34 0 20.34 0 35.61 0.02 35.61 0.02 39 32.23 39 32.23 34.76 18.23 34.76 18.23 23.31" /><circle class="cls-1" cx="16.11" cy="16.53" r="2.54" /><path class="cls-1" d="M16.11,4.24A11.87,11.87,0,0,1,28,16.1h4.25A16.11,16.11,0,0,0,0,16.1H4.25A11.87,11.87,0,0,1,16.11,4.24Z" /></svg>
+          {% else %}
+          <i class="fa-brands fa-{{ provider.lower() }}" aria-hidden="true"></i>
+          {% endif %}
+          <span>{{ _('Continue with %(provider)s', provider=provider) }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endblock %}
+    </div>
+  </div>
+</article>
 {% endblock %}
-{% endblock %}
-
 
 {% block secondary_content %}
 {% block help_register %}
 <section class="module module-narrow module-shallow">
-    <h2 class="module-heading"><i class="fa fa-info-circle"></i> {{ _('Need help?') }}</h2>
-    <div class="module-content">
-        <p>{% trans %} Login with your Dataporten or ORCID account. {% endtrans %}</p>
-        <p> If you find trouble logging in, please contact at <a href="mailto:{{ h.archive_manager_email()   }}">{{
-                h.archive_manager_email() }}</a></p>
-    </div>
+  <h2 class="module-heading"><i class="fa fa-info-circle"></i> {{ _('Need help?') }}</h2>
+  <div class="module-content">
+    <p>{% trans %}Sign in with your institutional account through Feide, or
+      with your ORCID account.{% endtrans %}</p>
+    <p>{% trans %}First time here? Signing in creates your account, and an
+      administrator reviews it before you get full access.{% endtrans %}</p>
+    {% set manager_email = h.archive_manager_email() if h.archive_manager_email is defined else '' %}
+    {% if manager_email %}
+    <p>
+      {% trans email=manager_email %}Trouble signing in? Contact
+      <a href="mailto:{{ email }}">{{ email }}</a>.{% endtrans %}
+    </p>
+    {% else %}
+    <p>{{ _('Trouble signing in? Please contact the archive administrator.') }}</p>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}
 {% endblock %}

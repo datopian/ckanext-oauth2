@@ -1,7 +1,7 @@
 {% extends "page.html" %}
 {% import 'macros/form.html' as form %}
 
-{% block subtitle %}{{ _('Manage Users') }}{% endblock %}
+{% block subtitle %}{{ _('Complete your profile') }}{% endblock %}
 
 {% block scripts %}
 {{ super() }}
@@ -14,16 +14,23 @@
   <div class="module-content">
     {% block primary_content_inner %}
     {% block form %}
-    {{ h.csrf_input() }}
+    <div class="account-update__intro">
+      <h1 class="page-heading">{{ _('Complete your profile') }}</h1>
+      <p class="account-update__lead">
+        {% trans %}To continue, please complete your profile below. Once you
+        submit it, an administrator will review your account.{% endtrans %}
+      </p>
+    </div>
+
     {% block form_errors %}{{ form.errors(error_summary) }}{% endblock %}
 
-    <div>
-      <h1 class="page-heading">{{ _('Update your profile details') }}</h1>
-    </div>
-    <form id="user-edit-form" class="dataset-form" method="post" enctype="multipart/form-data">
+    <form id="user-edit-form" class="dataset-form" method="post" enctype="multipart/form-data"
+          data-institution-required="{{ _('Please select your institution.') }}">
+      {# Must sit inside <form>: outside it the token is never submitted. #}
+      {{ h.csrf_input() }}
       {{ form.input('fullname', label=_('Full name'), id='field-fullname', value=data.fullname,
       error=errors.fullname,
-      placeholder=_('eg. Joe Bloggs'), classes=['control-medium']) }}
+      placeholder=_('eg. Joe Bloggs'), classes=['control-medium'], is_required=true) }}
 
       {% if data.email %}
 
@@ -46,31 +53,53 @@
       is_upload=is_upload,
       upload_label=_('Profile picture'), url_label=_('Profile picture URL') ) }}
 
-      {% call form.checkbox('guest_user', label=_('Guest User'), id='guest_user', 
-        value=True, checked=false, attrs={'data-module': 'guest-user-checkbox'} ) %}
-      {% set helper_text = _('If you want to register as a gueest user, please click on checkbox.') %}
-      {{ form.info(helper_text, classes='info-help-tight') }}
-      {% endcall %}
+      <fieldset class="institution-block">
+        <legend class="institution-block__legend">{{ _('Your institution') }}</legend>
 
-      {{ form.input('institution', label=_('Institution '), id='field-institution', type='institution',
-      value=data.institution, error=errors.institution, placeholder=_('Search or provide your institution name'),
-      classes=['control-medium input-institution'], attrs={
-      'class': 'form-control',
-      'data-module': 'autocomplete-institution',
-      'data-module-source': '/api/3/util/institution/autocomplete?q=?',
-      'data-module-createtags': false,
-      'data-module-key': 'name',
-      'data-module-label': 'title'
-      }, is_required=true ) }}
+        <div class="institution-choice">
+          <label class="institution-choice__option" for="affiliation-institution">
+            <input type="radio" name="affiliation" id="affiliation-institution"
+                   value="institution" data-module="guest-user-checkbox"
+                   {% if not data.guest_user %}checked{% endif %} />
+            <span><span class="control-required" title="{{ _('This field is required') }}">*</span> {{ _('I belong to an institution') }}</span>
+          </label>
+
+          <div class="institution-choice__field input-institution">
+            {{ form.input('institution', label=_('Institution'), id='field-institution', type='institution', is_required=true,
+            value=data.institution, error=errors.institution,
+            placeholder=_('Search for your institution'),
+            classes=['control-medium'], attrs={
+            'class': 'form-control',
+            'data-module': 'autocomplete-institution',
+            'data-module-source': '/api/3/util/institution/autocomplete?q=?',
+            'data-module-createtags': false,
+            'data-module-key': 'name',
+            'data-module-label': 'title',
+            'data-module-initial-label': data.institution_title or ''
+            } ) }}
+          </div>
+
+          <label class="institution-choice__option" for="affiliation-guest">
+            <input type="radio" name="affiliation" id="affiliation-guest"
+                   value="guest" data-module="guest-user-checkbox"
+                   {% if data.guest_user %}checked{% endif %} />
+            <span>{{ _('Register as a guest user') }}</span>
+          </label>
+        </div>
+
+        {# The server reads guest_user; the radios drive this hidden field. #}
+        <input type="hidden" name="guest_user" id="guest_user"
+               value="{{ 'True' if data.guest_user else '' }}" />
+      </fieldset>
 
 
       {{ form.required_message() }}
       <div class="form-actions">
-        <button class="btn btn-primary" type="submit" name="save">{{ _('Update and Continue') }}</button>
+        <button class="btn btn-primary" type="submit" name="save">{{ _('Submit for review') }}</button>
       </div>
-      {% endblock %}
-      {% endblock %}
     </form>
+    {% endblock %}
+    {% endblock %}
   </div>
 </article>
 {% endblock %}
@@ -79,13 +108,12 @@
 {% block help %}
 <section class="module module-narrow module-shallow">
   {% block help_inner %}
-  <h2 class="module-heading"><i class="fa fa-info-circle"></i> {{ _('Profile Info') }}</h2>
+  <h2 class="module-heading"><i class="fa fa-info-circle"></i> {{ _('Why we ask') }}</h2>
   <div class="module-content">
-    <p>{% trans %} Please enter your profile information. Your profile lets other CKAN users know about who you are and
-      what you
-      do.
-      process.
-      {% endtrans %}</p>
+    <p>{% trans %}These details are used to review your access request and to
+      let other users know who you are.{% endtrans %}</p>
+    <p>{% trans %}Once you submit, an administrator reviews your account and
+      you will receive an email with the outcome.{% endtrans %}</p>
   </div>
   {% endblock %}
 </section>

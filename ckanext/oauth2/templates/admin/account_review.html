@@ -33,6 +33,7 @@
                     </button>
 
                     <form method="POST">
+                        {{ h.csrf_input() }}
                         <input type="hidden" value="{{ user.id }}" name="id" />
                         <input type="hidden" value="approve" name="action" />
                         <button type="submit" class="btn btn-success btn-sm" title="{{ _('Approve') }}">
@@ -45,86 +46,105 @@
                         {{ _('Reject') }}
                     </button>
 
-                    <div class="modal" id="user-detail-{{user.id}}">
-                        <div class="modal-dialog">
+                    <div class="modal fade" id="user-detail-{{user.id}}" tabindex="-1"
+                        aria-labelledby="user-detail-label-{{user.id}}" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
                             <div class="modal-content">
                                 <div class="modal-header">
-                                    <h4 class="modal-title">{{ _('Account Details') }}
+                                    <h4 class="modal-title" id="user-detail-label-{{user.id}}">
+                                        {{ _('Account details') }}
                                     </h4>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                        aria-label="{{ _('Close') }}"></button>
                                 </div>
 
                                 <div class="modal-body">
-                                    <table>
-                                        <tr>
-                                            <td>{{ _('Name') }}:</td>
-                                            <td>{{ user.fullname or user.name }}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>{{ _('Email') }}:</td>
-                                            <td>{{ user.email }}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>{{ _('Institution') }}:</td>
-                                            {% if institution %}
-                                            <td><a href="{{ h.url_for('institution.read', id=institution.name) }}">
-                                                    {{institution.title}} </a>
-                                                {% elif user.institution.name %}
-                                            <td>{{ user.institution.name }} <span class="badge badge-success">New</span>
-                                            </td>
-                                            {% else %}
-                                            <td>{{ _('No institution') }}</td>
-                                            {% endif %}
-                                        </tr>
-                                        <tr>
-                                            <td>{{ _('About') }}:</td>
-                                            <td>{{ user.about or "Null"}}</td>
-                                        </tr>
-                                    </table>
+                                    <dl class="account-detail">
+                                        <dt>{{ _('Name') }}</dt>
+                                        <dd>{{ user.fullname or user.name }}</dd>
 
+                                        <dt>{{ _('Email') }}</dt>
+                                        <dd><a href="mailto:{{ user.email }}">{{ user.email }}</a></dd>
+
+                                        <dt>{{ _('Institution') }}</dt>
+                                        <dd>
+                                            {% if user.guest %}
+                                            <span class="badge bg-secondary">{{ _('Guest user') }}</span>
+                                            {% elif institution %}
+                                            <a href="{{ h.url_for('institution.read', id=institution.name) }}">{{ institution.title }}</a>
+                                            {% elif user.institution %}
+                                            {{ user.institution }}
+                                            <span class="badge bg-success">{{ _('New') }}</span>
+                                            {% else %}
+                                            <span class="text-muted">{{ _('No institution') }}</span>
+                                            {% endif %}
+                                        </dd>
+
+                                        <dt>{{ _('Registered') }}</dt>
+                                        <dd>{{ h.render_datetime(user.created, with_hours=true) }}</dd>
+
+                                        {% if user.about %}
+                                        <dt>{{ _('About') }}</dt>
+                                        <dd>{{ user.about }}</dd>
+                                        {% endif %}
+                                    </dl>
                                 </div>
+
                                 <div class="modal-footer">
-                                    <button type="button" class="btn btn-default" data-bs-dismiss="modal"> {{
-                                        _('Cancel') }}</button>
+                                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">
+                                        {{ _('Close') }}
+                                    </button>
                                 </div>
-                                </form>
                             </div>
                         </div>
                     </div>
 
-                    <div class="modal" id="reject-modal-{{user.id}}">
-                        <div class="modal-dialog">
-                            <form method="POST">
+                    <div class="modal fade" id="reject-modal-{{user.id}}" tabindex="-1"
+                        aria-labelledby="reject-modal-label-{{user.id}}" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            {# The form must wrap header, body AND footer: the submit
+                               button lives in the footer, and the previous markup
+                               closed the form before it. #}
+                            <form method="POST" class="modal-content">
+                                {{ h.csrf_input() }}
+                                <input type="hidden" value="{{ user.id }}" name="id" />
+                                <input type="hidden" value="reject" name="action" />
 
-                                <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 class="modal-title" id="reject-modal-label-{{user.id}}">
+                                        {{ _('Reject this account?') }}
+                                    </h4>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                        aria-label="{{ _('Close') }}"></button>
+                                </div>
 
-                                    <div class="modal-header">
-                                        <h4 class="modal-title">{{ _('Are you sure you want to reject this account?') }}
-                                        </h4>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                <div class="modal-body">
+                                    <p>
+                                        {% trans name=user.fullname or user.email %}
+                                        <strong>{{ name }}</strong> will be told their request was
+                                        not approved, and will not be able to sign in.
+                                        {% endtrans %}
+                                    </p>
+
+                                    <div class="form-group">
+                                        <label class="form-label" for="message-{{user.id}}">
+                                            {{ _('Reason (included in the email)') }}
+                                        </label>
+                                        <textarea class="form-control" id="message-{{user.id}}"
+                                            name="message" rows="3"
+                                            placeholder="{{ _('Explain why this request was declined') }}"></textarea>
                                     </div>
+                                </div>
 
-                                    <div class="modal-body">
-                                        <div class="form-group">
-                                            <label for="reason">{{ _('Message') }}</label>
-                                            <textarea class="form-control" id="message" name="message"
-                                                rows="3"></textarea>
-                                        </div>
-                                        <input type="hidden" value="{{ user.id }}" name="id" />
-                                        <input type="hidden" value="reject" name="action" />
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">
+                                        {{ _('Cancel') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-danger">{{ _('Reject account') }}</button>
+                                </div>
                             </form>
                         </div>
-
-                        <div class="modal-footer">
-                            <button type="submit" class="btn btn-danger">{{_('Reject')}}</button>
-                            <button type="button" class="btn btn-default" data-bs-dismiss="modal"> {{
-                                _('Cancel') }}</button>
-                        </div>
-                        </form>
-
-
                     </div>
-                </div>
                 {% endif %}
             </td>
         </tr>

@@ -48,7 +48,6 @@ def init_db(model):
             sa.Column("guest", sa.types.Boolean),
         )
 
-        # Create the table only if it does not exist
-        user_token_table.create(checkfirst=True)
+        user_token_table.create(model.meta.engine, checkfirst=True)
 
-        model.meta.mapper(UserToken, user_token_table)
+        model.meta.registry.map_imperatively(UserToken, user_token_table)

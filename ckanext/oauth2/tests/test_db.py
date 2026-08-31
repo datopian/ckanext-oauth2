@@ -45,7 +45,7 @@ class DBTest(unittest.TestCase):
 
         # Assert that table method has been called
         db.sa.Table.assert_called_once()
-        model.meta.mapper.assert_called_once()
+        model.meta.registry.map_imperatively.assert_called_once()
 
     def test_initdb_initialized(self):
         db.UserToken = MagicMock()
@@ -56,4 +56,5 @@ class DBTest(unittest.TestCase):
 
         # Assert that table method has been called
         self.assertEquals(0, db.sa.Table.call_count)
-        self.assertEquals(0, model.meta.mapper.call_count)
+        self.assertEquals(
+            0, model.meta.registry.map_imperatively.call_count)

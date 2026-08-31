@@ -1,33 +1,82 @@
 {% extends "page.html" %}
 
-{% block subtitle %}{{ _("Profile information") }}{% endblock %}
+{% block subtitle %}{{ _("Account is in review") }}{% endblock %}
 
+{% block breadcrumb_content %}{% endblock %}
+
+{% block wrapper_class %} account-status-wrapper{% endblock %}
+
+{#
+  This is a terminal status page: the user can't act on anything here, so it
+  drops the secondary column and centres a single message. The gate in
+  plugin.py already flashes "pending approval" on the redirect that lands
+  here, which would just repeat the heading — so the flash is swallowed.
+#}
+{% block flash %}{% endblock %}
 
 {% block primary_content %}
 <article class="module">
   <div class="module-content">
     {% block primary_content_inner %}
-    {{ self.flash() }}
-    <h1>{{ _('Account is in review') }}</h1>
-    <p class="alert alert-warning">{{ _('Your account is currently under review by an administrator, and you will receive an email upon approval or rejection.') }}</p>
+    <div class="account-pending">
+
+      <span class="account-pending__icon" aria-hidden="true">
+        <i class="fa fa-hourglass-half"></i>
+      </span>
+
+      <h1 class="account-pending__title">{{ _('Your account is in review') }}</h1>
+
+      <p class="account-pending__lead">
+        {% trans %}Thanks for completing your profile. An administrator is
+        reviewing it now.{% endtrans %}
+      </p>
+
+      {% if user_email %}
+      <p class="account-pending__email">
+        {% trans email=user_email %}You will receive an email at
+        <strong>{{ email }}</strong>{% endtrans %}
+      </p>
+      {% endif %}
+
+      <ol class="account-pending__steps">
+        <li>
+          <strong>{{ _('Under review') }}</strong>
+          <span>{{ _('An administrator checks the details you submitted.') }}</span>
+        </li>
+        <li>
+          <strong>{{ _('Decision emailed') }}</strong>
+          <span>{{ _('Sent as soon as the review is complete.') }}</span>
+        </li>
+        <li>
+          <strong>{{ _('Full access') }}</strong>
+          <span>{{ _('Sign in again to start using the archive.') }}</span>
+        </li>
+      </ol>
+
+      <p class="account-pending__note">
+        {% trans %}No further action is needed from you — feel free to close
+        this page.{% endtrans %}
+      </p>
+
+      <div class="account-pending__actions">
+        <a class="btn btn-primary" href="{{ h.url_for('user.logout') }}">{{ _('Log out') }}</a>
+      </div>
+
+      <p class="account-pending__help">
+        {% if contact_email %}
+          {% trans email=contact_email %}Haven't heard back, or think this is a
+          mistake? Check your spam folder, then contact
+          <a href="mailto:{{ email }}">{{ email }}</a>.{% endtrans %}
+        {% else %}
+          {% trans %}Haven't heard back, or think this is a mistake? Check your
+          spam folder, then contact the archive administrator.{% endtrans %}
+        {% endif %}
+      </p>
+
+    </div>
     {% endblock %}
   </div>
 </article>
 {% endblock %}
 
-{% block secondary_content %}
-{% block help %}
-<section class="module module-narrow module-shallow">
-  {% block help_inner %}
-  <h2 class="module-heading">{{ _('Need Help?') }}</h2>
-  <div class="module-content">
-    <p>{% trans %}
-      Haven't received an email? Please check your spam folder. If you still can't find it, please contact system
-      administrator.
-      {% endtrans %}
-    </p>
-  </div>
-  {% endblock %}
-</section>
-{% endblock %}
-{% endblock %}
+{% block secondary %}{% endblock %}

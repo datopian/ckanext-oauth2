@@ -34,8 +34,32 @@ from ckanext.oauth2 import oauth2
 from ckanext.oauth2 import db
 from ckanext.oauth2 import controller
 from ckanext.oauth2 import helpers
+from ckanext.oauth2 import auth
 
 log = logging.getLogger(__name__)
+
+# Endpoints reachable regardless of account state: static assets, the auth
+# flow itself, and resource downloads (which must keep working while an
+# account is still being set up or reviewed).
+EXEMPT_ENDPOINTS = frozenset([
+    "static",
+    "user.login",
+    "user.logout",
+    "webassets.index",
+    "_debug_toolbar.static",
+    "util.internal_redirect",
+    "api.i18n_js_translations",
+    "oauth2.institution_autocomplete",
+    "approval_dataset.download_resource",
+])
+
+# An account state that gates browsing, mapped to the endpoint such a user is
+# sent to instead. A user is never redirected away from their own gate.
+# No flash message: each destination page explains the state on its own.
+ACCOUNT_STATE_GATES = {
+    "incomplete": "oauth2.account_update",
+    "pending": "oauth2.account_pending",
+}
 
 
 class OAuth2Plugin(plugins.SingletonPlugin):
@@ -43,9 +67,12 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IAuthenticator, inherit=True)
     plugins.implements(plugins.IBlueprint)
     plugins.implements(plugins.IConfigurer)
+    plugins.implements(plugins.IConfigurable)
     plugins.implements(plugins.IMiddleware, inherit=True)
+    plugins.implements(plugins.IAuthFunctions)
 
-    def __init__(self, name=None):
+    # IConfigurable
+    def configure(self, config):
         log.debug("Initializing the OAuth2 plugin")
         db.init_db(model)
 
@@ -55,6 +82,16 @@ class OAuth2Plugin(plugins.SingletonPlugin):
             "sso_login_options": helpers.get_sso_options,
             "user_is_sso_user": helpers.user_is_sso_user,
             "is_institution_exist": helpers.is_institution_exist,
+        }
+
+    # IAuthFunctions
+    def get_auth_functions(self):
+        # Enforced here rather than only in the view: the account gate is an
+        # after_request hook and cannot stop a direct user_update/user_patch
+        # API call.
+        return {
+            "user_update": auth.user_update,
+            "user_patch": auth.user_patch,
         }
 
     def get_blueprint(self):
@@ -137,55 +174,24 @@ class OAuth2Plugin(plugins.SingletonPlugin):
     def make_middleware(self, app, config):
 
         def check_account_state(response):
-            def _allowed_endpoint(endpoint):
-                allowed_endpoints = [
-                    "static",
-                    "oauth2.account_update",
-                    "user.login",
-                    "user.logout",
-                    "webassets.index",
-                    "_debug_toolbar.static",
-                    "util.internal_redirect",
-                    "api.i18n_js_translations",
-                    "oauth2.institution_autocomplete",
-                    "oauth2.account_pending",
-                ]
-                return endpoint in allowed_endpoints
+            if not toolkit.current_user.is_authenticated:
+                return response
 
-            if toolkit.current_user.is_authenticated:
-                user = model.User.get(toolkit.current_user.name)
-                account_state = (
-                    user.plugin_extras.get("account_state")
-                    if user.plugin_extras
-                    else None
-                )
-                if account_state in ["incomplete", "pending"]:
-                    if not _allowed_endpoint(toolkit.request.endpoint):
-                        if account_state == "incomplete":
-                            toolkit.h.flash_notice(
-                                toolkit._("Please complete your account setup.")
-                            )
-                            if toolkit.request.endpoint == "approval_dataset.download_resource":
-                                return  response
-                            else:
-                                response.headers["Location"] = toolkit.url_for(
-                                    "oauth2.account_update"
-                                )
-                                response.status_code = 302
-                            return response
-                        elif account_state == "pending":
-                            if toolkit.request.endpoint == "approval_dataset.download_resource":
-                                return  response
-                            else:
-                                toolkit.h.flash_notice(
-                                    toolkit._("Your account is pending approval.")
-                                )
-                              
-                                response.headers["Location"] = toolkit.url_for(
-                                    "oauth2.account_pending"
-                                )
-                                response.status_code = 302
-                            return response
+            user = model.User.get(toolkit.current_user.name)
+            if not user or not user.plugin_extras:
+                return response
+
+            account_state = user.plugin_extras.get("account_state")
+            gate_endpoint = ACCOUNT_STATE_GATES.get(account_state)
+            if gate_endpoint is None:
+                return response
+
+            endpoint = toolkit.request.endpoint
+            if endpoint in EXEMPT_ENDPOINTS or endpoint == gate_endpoint:
+                return response
+
+            response.headers["Location"] = toolkit.url_for(gate_endpoint)
+            response.status_code = 302
             return response
 
         app.after_request(check_account_state)

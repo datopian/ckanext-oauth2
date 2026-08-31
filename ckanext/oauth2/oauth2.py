@@ -228,10 +228,12 @@ class OAuth2Helper(object):
                 user_data = profile_response.json()
                 user = self.user_json(user_data)
 
-        # Save the user in the database
+        # Save the user in the database.
+        # No Session.remove() here: it detaches `user`, and every later read of
+        # a column (state, name, ...) then raises DetachedInstanceError. The
+        # request teardown closes the session anyway.
         model.Session.add(user)
         model.Session.commit()
-        model.Session.remove()
 
         return user
 

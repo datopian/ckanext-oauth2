@@ -25,6 +25,7 @@ import logging
 import threading
 
 
+import flask
 from flask.views import MethodView
 from flask import Blueprint, redirect
 from urllib.parse import urlparse
@@ -102,15 +103,13 @@ def callback(provider):
         user = oauth2helper.identify(token)
 
         if user.state == "rejected":
-            helpers.flash_error(tk._("Your account has been rejected."))
-            return tk.redirect_to("/")
+            return tk.redirect_to("oauth2.account_rejected")
 
         oauth2helper.login_user(user)
         oauth2helper.update_token(user.name, token)
         return oauth2helper.redirect_from_callback()
 
     except Exception as e:
-        session.save()
         error_description = tk.request.args.get("error_description", None)
         if not error_description:
             for attr in ["message", "description", "error"]:
@@ -122,7 +121,7 @@ def callback(provider):
 
         redirect_url = oauth2.get_came_from(tk.request.params.get("state"))
         redirect_url = "/" if redirect_url == constants.INITIAL_PAGE else redirect_url
-        log.error("Error in OAuth2 callback: %s" % e)
+        log.exception("Error in OAuth2 callback: %r", e)
         helpers.flash_error(error_description)
         return tk.redirect_to(redirect_url)
 
@@ -163,8 +162,9 @@ class UserProfileController(MethodView):
                         body_html=body,
                     )
         except Exception as e:
-            log.error("Error sending email: %s", e)
-            tk.h.flash_error(tk._("Failed to send email to admin users"))
+            # No flash here: this runs in a worker thread with no request
+            # session to write to, and the user has already been redirected.
+            log.error("Error sending email to admin users: %s", e)
 
     def _mail_user(self, user):
 
@@ -185,8 +185,39 @@ class UserProfileController(MethodView):
                     body_html=body,
                 )
         except Exception as e:
+            # Runs in a worker thread with no request session to flash into.
             log.error("Error sending email: %s", e)
-            tk.h.flash_error(tk._("Failed to send email to user"))
+
+    def _redirect_if_not_editable(self, user):
+        """Stop a user editing their profile once it is out of their hands.
+
+        The account gate runs as an after_request hook, so by the time it
+        swaps in a redirect this view has already committed. A pending or
+        rejected user must be turned away here, before any write happens.
+        """
+        state = (user.plugin_extras or {}).get("account_state")
+        if state == "pending":
+            return tk.redirect_to("oauth2.account_pending")
+        if user.state == "rejected":
+            return tk.redirect_to("oauth2.account_rejected")
+        return None
+
+    # Fields this form is allowed to set. Everything else is discarded:
+    # the context below uses ignore_auth=True, which disables CKAN's
+    # ignore_not_sysadmin validator, so an unfiltered dict would let a user
+    # POST sysadmin/state/plugin_extras and escalate their own account.
+    ALLOWED_FIELDS = frozenset([
+        "fullname",
+        "email",
+        "about",
+        "image_url",
+        "image_upload",
+        "clear_upload",
+        "institution",
+        "guest_user",
+        "affiliation",
+        "save",
+    ])
 
     def _get_cleaned_data_dict(self):
         data_dict = logic.clean_dict(
@@ -201,7 +232,16 @@ class UserProfileController(MethodView):
                 )
             )
         )
-        return data_dict
+
+        rejected = set(data_dict) - self.ALLOWED_FIELDS
+        if rejected:
+            log.warning(
+                "Discarding unexpected profile fields from %s: %s",
+                tk.current_user.name,
+                ", ".join(sorted(rejected)),
+            )
+
+        return {k: v for k, v in data_dict.items() if k in self.ALLOWED_FIELDS}
 
     def _validate_data(self, data_dict, user):
         errors = {}
@@ -240,29 +280,50 @@ class UserProfileController(MethodView):
         return errors
 
     def _update_user_token(self, data_dict):
-        user_token = db.UserToken.by_user_name(user_name=data_dict.get("name"))
+        user_name = data_dict.get("name")
+        user_token = db.UserToken.by_user_name(user_name=user_name)
         if not user_token:
-            user_token = db.UserToken(user_name=data_dict.get("name"))
-        else:
-            user_token.institution = data_dict.get("institution", "")
-            user_token.guest = tk.asbool(data_dict.get("guest_user", False))
+            user_token = db.UserToken(user_name=user_name)
+
+        # Set on both paths: a first-time user has no token row yet, and
+        # previously only the update branch persisted these fields.
+        user_token.institution = data_dict.get("institution", "")
+        user_token.guest = tk.asbool(data_dict.get("guest_user", False))
 
         model.Session.add(user_token)
         model.Session.commit()
 
     def get(self):
-        try:
-            if not tk.current_user.is_authenticated:
-                tk.abort(401, tk._("Unauthorized to visit this page"))
+        if not tk.current_user.is_authenticated:
+            return tk.abort(401, tk._("Unauthorized to visit this page"))
 
-            user = model.User.get(tk.current_user.id)
-            user_token = db.UserToken.by_user_name(user_name=user.get("name"))
+        user = model.User.get(tk.current_user.id)
+        if not user:
+            return tk.abort(404, tk._("User not found"))
+
+        redirect = self._redirect_if_not_editable(user)
+        if redirect:
+            return redirect
+
+        try:
+            # User.get() is a classmethod lookup, not a dict accessor: the old
+            # user.get("name") searched for a user literally named "name" and
+            # returned None, so the saved institution never reached the form.
+            user_token = db.UserToken.by_user_name(user_name=user.name)
+            institution = user_token.institution if user_token else ""
+            institution_title = ""
+            if institution:
+                group = model.Group.get(institution)
+                if group:
+                    institution_title = group.title or group.name
 
             extra_vars = {
                 "data": {
                     "fullname": user.fullname,
                     "email": user.email,
-                    "institution": user_token.institution if user_token else "",
+                    "institution": institution,
+                    "institution_title": institution_title,
+                    "guest_user": user_token.guest if user_token else False,
                 },
                 "errors": {},
                 "error_summary": {},
@@ -271,16 +332,26 @@ class UserProfileController(MethodView):
 
             return tk.render("user/account_update.html", extra_vars=extra_vars)
         except Exception as e:
-            log.error("Error updating user profile: %s", e)
-            return tk.abort(500, tk._("Error updating user profile"))
+            log.error("Error rendering account update form: %s", e)
+            return tk.abort(500, tk._("Error loading your profile"))
 
     def post(self):
         context = self._prepare()
 
         if not tk.current_user.is_authenticated:
-            tk.abort(401, tk._("Unauthorized to visit this page"))
+            return tk.abort(401, tk._("Unauthorized to visit this page"))
 
         user = model.User.get(tk.current_user.id)
+        if not user:
+            return tk.abort(404, tk._("User not found"))
+
+        redirect = self._redirect_if_not_editable(user)
+        if redirect:
+            return redirect
+
+        # Bound before the try so the error paths below can always re-render
+        # the form with whatever the user typed.
+        data_dict = {}
 
         try:
             data_dict = self._get_cleaned_data_dict()
@@ -303,22 +374,79 @@ class UserProfileController(MethodView):
             # Update user extras fields
             self._update_user_token(user_token_dict)
 
-            # Send email to user and admin
-            self._mail_user(user)
-            thread = threading.Thread(target=self._mail_admins, args=(user_dict,))
-            thread.start()
+            # Notify off the request path: a slow or unreachable SMTP server
+            # must not stall the redirect, and a failed notification must not
+            # discard an account update that is already committed.
+            self._notify_submission(user, user_dict)
 
             return tk.redirect_to("oauth2.account_pending")
 
         except tk.ValidationError as e:
-            errors = e.error_dict
-            error_summary = e.error_summary
-            extra_vars = {
+            # Field-level problems: re-render with the messages next to the
+            # inputs that caused them.
+            return self._render_form(data_dict, e.error_dict, e.error_summary)
+
+        except tk.NotAuthorized:
+            # Not a form problem, and retrying will not help.
+            return tk.abort(403, tk._("You are not allowed to update this profile"))
+
+        except tk.ObjectNotFound:
+            return tk.abort(404, tk._("User not found"))
+
+        except Exception:
+            # Genuinely unexpected: log the traceback and let CKAN show its
+            # error page rather than implying the user did something wrong
+            # or that retrying the same input would work.
+            log.exception("Unexpected error updating profile for user %s", user.name)
+            raise
+
+    def _render_form(self, data_dict, errors, error_summary):
+        return tk.render(
+            "user/account_update.html",
+            extra_vars={
                 "data": data_dict,
-                "errors": errors,
-                "error_summary": error_summary,
-            }
-            return tk.render("user/account_update.html", extra_vars=extra_vars)
+                "errors": errors or {},
+                "error_summary": error_summary or {},
+                "hide_masterhead": True,
+            },
+        )
+
+    def _notify_submission(self, user, user_dict):
+        # The mail helpers read tk.config and render templates, so the worker
+        # needs its own app context - the request one is gone by then.
+        app = flask.current_app._get_current_object()
+
+        def _send():
+            with app.app_context():
+                try:
+                    self._mail_user(user)
+                except Exception as e:
+                    log.error("Error sending confirmation to user: %s", e)
+                try:
+                    self._mail_admins(user_dict)
+                except Exception as e:
+                    log.error("Error sending notification to admins: %s", e)
+
+        threading.Thread(target=_send).start()
+
+
+def account_rejected():
+    """Explain a declined access request.
+
+    The user is not logged in at this point (the OAuth2 callback stops before
+    login_user), so this page shows no account details: the address is not
+    put in the URL, where it would leak into logs and be caller-controlled.
+    The administrator's reason is only sent by email, so it is not shown here.
+    """
+    try:
+        contact_email = tk.h.archive_manager_email()
+    except Exception:
+        contact_email = ""
+
+    extra_vars = {
+        "contact_email": contact_email,
+    }
+    return tk.render("user/account_rejected.html", extra_vars=extra_vars)
 
 
 def account_pending():
@@ -331,10 +459,19 @@ def account_pending():
             if account_state != "pending":
                 return tk.abort(404, tk._("Not found"))
 
+        # archive_manager_email() comes from ckanext-sigma2, which may not be
+        # loaded; fall back to no address rather than breaking the page.
+        try:
+            contact_email = tk.h.archive_manager_email()
+        except Exception:
+            contact_email = ""
+
         extra_vars = {
             "user_id": user.id,
             "user_dict": user.as_dict(),
             "account_pending": True,
+            "user_email": user.email,
+            "contact_email": contact_email,
         }
         return tk.render("user/account_pending.html", extra_vars=extra_vars)
 
@@ -615,11 +752,14 @@ oauth2.add_url_rule(
 )
 
 oauth2.add_url_rule(
-    "/user/account/udpate",
+    "/user/account/update",
     view_func=UserProfileController.as_view(str("account_update")),
 )
 
 oauth2.add_url_rule("/user/account/pending", view_func=account_pending, methods=["GET"])
+oauth2.add_url_rule(
+    "/user/account/rejected", view_func=account_rejected, methods=["GET"]
+)
 
 
 oauth2.add_url_rule(

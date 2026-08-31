@@ -2,46 +2,49 @@
     display: none;
 }
 
+/* Login: provider buttons. Fluid width with a max, rather than a fixed
+   300px that overflowed longer provider names on narrow screens. The top
+   margin is small so the panel aligns with the sidebar module beside it. */
 .sso-container {
-    width: 300px;
-    margin: auto;
-    background: #fff;
-    padding: 8px;
-    margin-top: 40px;
+    width: 100%;
+    max-width: 20rem;
+    margin: 0 auto;
+    padding: 0.5rem 0 1rem;
     display: flex;
     flex-direction: column;
 }
 
-.sso-item {
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: center;
-}
-
 .sso-heading {
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
     text-align: center;
-    margin-bottom: 35px;
-    position: relative;
 }
 
-.sso-heading:before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    right: -10px;
-    height: 0;
-    width: 100px;
-    border-top: 1px solid #d8dde0;
+.sso-intro {
+    margin-bottom: 1.5rem;
+    text-align: center;
+    font-size: 0.95rem;
+    color: #666;
+    line-height: 1.55;
 }
 
-.sso-heading:after {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: -10px;
-    height: ;
-    width: 100px;
-    border-top: 1px solid #d8dde0;
+.sso-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.sso-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    margin-bottom: 0;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.25;
 }
 
 
@@ -58,8 +61,8 @@
 }
 
 .sso-item i, .sso-item svg {
-    margin-right: 15px;
-    font-size: 20px;
+    flex: 0 0 auto;
+    font-size: 1.25rem;
 }
 
 .account-review-action {
@@ -118,23 +121,36 @@
     padding: 0;
 }
 
-.institution-option {
+.institution-option,
+.organization-option {
     display: flex;
     flex-direction: row;
     align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.institution-option span,
+.organization-option span {
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .image-container {
-    width: 50px;
-    height: 40px;
-    overflow: hidden; 
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    overflow: hidden;
   }
 
   .image-container img {
-    padding-right:10px;
     width: 100%;
     height: 100%;
-    object-fit: cover; 
+    object-fit: contain;
   }
 
   .select2-container .select2-choice {
@@ -149,13 +165,298 @@
     width: 100%;
   }
 
-  .select2-chosen .institution-option .image-container {
-    width: 30px;
-    height: 26px;
-  }
-  
+
   .select2-container .select2-choice .select2-arrow b {
     margin-top: 4px;
   }
 
   
+/* Account pending / in-review status page */
+/* These pages drop the sidebar, so .primary spans all 12 columns and the
+   card would stretch the full viewport around a narrow column of text.
+   Scoped by a wrapper class the status templates set, so other no-nav
+   pages (resource_read) are untouched. */
+.account-status-wrapper .primary {
+  max-width: 46rem;
+  margin: 0 auto;
+  float: none;
+}
+
+.account-pending {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem 0 2.5rem;
+  text-align: center;
+}
+
+.account-pending__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  margin-bottom: 1.25rem;
+  border-radius: 50%;
+  background: #eaf4fb;
+  color: #2278a8;
+  font-size: 1.6rem;
+}
+
+.account-pending__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.75rem;
+  line-height: 1.25;
+}
+
+.account-pending__lead {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #444;
+}
+
+.account-pending__email {
+  margin: 0 0 1.75rem;
+  color: #666;
+}
+
+.account-pending__email strong {
+  color: #222;
+  word-break: break-all;
+}
+
+/* Numbered steps: counter-based markers so they stay aligned when the
+   text wraps, which list-style numbers do not. */
+.account-pending__steps {
+  margin: 0 0 1.75rem;
+  padding: 1.25rem 0 0;
+  list-style: none;
+  counter-reset: account-pending-step;
+  border-top: 1px solid #e5e5e5;
+  text-align: left;
+}
+
+.account-pending__steps li {
+  position: relative;
+  min-height: 1.75rem;
+  margin-bottom: 1rem;
+  padding-left: 2.5rem;
+  counter-increment: account-pending-step;
+}
+
+.account-pending__steps li:last-child {
+  margin-bottom: 0;
+}
+
+.account-pending__steps li::before {
+  content: counter(account-pending-step);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: #f0f0f0;
+  color: #555;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.account-pending__steps strong {
+  display: block;
+  line-height: 1.75rem;
+}
+
+.account-pending__steps span {
+  color: #666;
+}
+
+.account-pending__note {
+  margin: 0 0 1.5rem;
+  color: #666;
+}
+
+.account-pending__actions {
+  margin-bottom: 1.5rem;
+}
+
+.account-pending__help {
+  margin: 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e5e5;
+  font-size: 0.9rem;
+  color: #777;
+}
+
+/* Rejected variant of the status page */
+.account-pending--rejected .account-pending__icon {
+  background: #fdecea;
+  color: #b3261e;
+}
+
+
+/* Institution picker on the account update form */
+.institution-block {
+    margin: 0 0 1.5rem;
+    padding: 1.25rem 1.25rem 0.75rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.institution-block__legend {
+    width: auto;
+    margin: 0 0 0.75rem;
+    padding: 0 0.4rem;
+    border: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.institution-block__hint {
+    margin: -0.35rem 0 1rem;
+    font-size: 0.85rem;
+    color: #777;
+}
+
+/* select2 renders its own control; match the height and focus treatment of
+   the plain Bootstrap inputs above it so the form reads as one set. */
+.institution-block .select2-container .select2-choice {
+    height: 38px !important;
+    padding: 6px 0 0 10px !important;
+    border-radius: 4px;
+}
+
+.institution-block .select2-container.select2-container-active .select2-choice {
+    border-color: #66afe9;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 6px rgba(102, 175, 233, 0.5);
+}
+
+.institution-block .institution-option {
+    gap: 0.5rem;
+}
+
+.institution-block .checkbox {
+    font-weight: 400;
+}
+
+
+/* Institution dropdown: compact rows, and a highlight that matches the
+   site palette instead of select2's default blue. */
+.select2-results li {
+    line-height: 1.3;
+}
+
+.select2-results .select2-result-label {
+    padding: 6px 8px;
+}
+
+.select2-results .select2-highlighted {
+    background: #2b4257;
+}
+
+.select2-drop {
+    border-color: #ccc;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.select2-drop .select2-search {
+    padding: 6px 6px 2px;
+}
+
+.institution-block .select2-container .select2-choice {
+    height: 38px !important;
+    padding: 5px 0 0 8px !important;
+    border-radius: 4px;
+}
+
+.institution-block .select2-container.select2-container-active .select2-choice {
+    border-color: #66afe9;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 6px rgba(102, 175, 233, 0.5);
+}
+
+/* Affiliation choice: institution vs guest.
+   CKAN core adds `label:after { content: ":" }` and only exempts
+   .radio/.checkbox, so clear it on these labels and on the institution
+   field's own label, which is visually hidden. */
+.institution-choice__option::after,
+.institution-choice__field .form-label::after {
+    content: "" !important;
+}
+
+/* The field's label is redundant beside the radio, but kept for screen
+   readers rather than removed. */
+.institution-choice__field .form-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.institution-choice__option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.institution-choice__option input {
+    margin: 0;
+}
+
+.institution-choice__field {
+    margin: 0 0 0.9rem 1.5rem;
+}
+
+.institution-choice__field .form-group {
+    margin-bottom: 0;
+}
+
+.institution-choice__field.has-error .select2-choice {
+    border-color: #b3261e;
+}
+
+.institution-choice__error {
+    display: block;
+    margin-top: 0.35rem;
+    color: #b3261e;
+    font-size: 0.85rem;
+}
+
+/* Required marker: core renders this in a muted pink; make it read clearly
+   as a required indicator. */
+.institution-block .control-required {
+    color: #d32f2f;
+    font-weight: 700;
+}
+
+
+/* Account review: detail modal */
+.account-detail {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.6rem 1.25rem;
+}
+
+.account-detail dt {
+    color: #666;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.account-detail dd {
+    margin: 0;
+    word-break: break-word;
+}
