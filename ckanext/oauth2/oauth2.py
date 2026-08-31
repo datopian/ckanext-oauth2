@@ -24,6 +24,7 @@ import os
 import yaml
 import base64
 import random
+import secrets
 import json
 import logging
 import requests
@@ -36,7 +37,7 @@ from base64 import b64encode, b64decode
 
 import ckan.model as model
 from ckan.plugins import toolkit
-from ckan.common import login_user
+from ckan.common import login_user, session
 from ckan import model
 
 from ckanext.oauth2 import constants
@@ -45,12 +46,35 @@ from ckanext.oauth2.db import UserToken
 log = logging.getLogger(__name__)
 
 
-def generate_state(url):
-    return b64encode(bytes(json.dumps({constants.CAME_FROM_FIELD: url}), "utf-8"))
+def generate_state(came_from_url):
+    """Create a random, single-use state nonce and stash it in the session
+    together with the page to return to. The nonce is what the callback
+    validates against to prevent login CSRF; came_from is kept server-side so
+    it can never be supplied (and tampered with) through the state param.
+    """
+    state = secrets.token_urlsafe(32)
+    session[constants.STATE_SESSION_KEY] = state
+    session[constants.CAME_FROM_SESSION_KEY] = came_from_url
+    session.save()
+    return state
 
 
-def get_came_from(state):
-    return json.loads(b64decode(state)).get(constants.CAME_FROM_FIELD, "/")
+def verify_state(returned_state):
+    """Pop the stored nonce and confirm it matches the one returned by the IdP.
+    Constant-time compare; a missing or mismatching state fails.
+    """
+    stored_state = session.pop(constants.STATE_SESSION_KEY, None)
+    session.save()
+    if not stored_state or not returned_state:
+        return False
+    return secrets.compare_digest(stored_state, returned_state)
+
+
+def pop_came_from():
+    """Return (and clear) the server-side came_from stored at challenge time."""
+    came_from = session.pop(constants.CAME_FROM_SESSION_KEY, constants.INITIAL_PAGE)
+    session.save()
+    return came_from
 
 
 REQUIRED_CONF = (
@@ -147,6 +171,11 @@ class OAuth2Helper(object):
         return auth_url
 
     def get_token(self):
+        # CSRF protection: the state returned by the IdP must match the
+        # single-use nonce we stored in the session at challenge time.
+        if not verify_state(toolkit.request.params.get("state")):
+            raise ValueError("OAuth2 state mismatch: possible login CSRF")
+
         oauth = OAuth2Session(
             self.client_id, redirect_uri=self.redirect_uri, scope=self.scope
         )
@@ -298,17 +327,17 @@ class OAuth2Helper(object):
         login_user(user)
 
     def redirect_from_callback(self):
-        """Redirect to the callback URL after a successful authentication."""
-        state = toolkit.request.params.get("state")
-        came_from = get_came_from(state)
+        """Redirect to the page saved at challenge time. came_from comes from
+        the session (server-side), never from the client, so it cannot be used
+        as an open redirect.
+        """
+        came_from = pop_came_from()
 
         if urlparse(came_from).path == "/user/login":
             came_from = urlunparse(
                 urlparse(came_from)._replace(path=constants.INITIAL_PAGE)
             )
-            return toolkit.redirect_to(came_from)
-        else:
-            return toolkit.redirect_to(came_from)
+        return toolkit.redirect_to(came_from)
 
     def get_stored_token(self, user_name):
         user_token = UserToken.by_user_name(user_name=user_name)

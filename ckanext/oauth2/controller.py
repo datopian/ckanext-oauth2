@@ -97,7 +97,7 @@ def callback(provider):
             else:
                 error_description = type(e).__name__
 
-        redirect_url = oauth2.get_came_from(tk.request.params.get("state"))
+        redirect_url = oauth2.pop_came_from()
         redirect_url = "/" if redirect_url == constants.INITIAL_PAGE else redirect_url
         log.error("Error in OAuth2 callback: %s" % e)
         helpers.flash_error(error_description)
