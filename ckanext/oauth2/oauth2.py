@@ -77,6 +77,38 @@ def pop_came_from():
     return came_from
 
 
+# The Entra object id is immutable; email/UPN are not. We store it on the user's
+# plugin_extras under the "sse" namespace so accounts can be matched (and, by
+# ckanext-sse, deactivated) on a stable key rather than a mutable email.
+ENTRA_OID_NAMESPACE = "ssen"
+ENTRA_OID_KEY = "entra_oid"
+
+
+def _user_by_entra_oid(oid):
+    """The CKAN user carrying this Entra object id, or None."""
+    return (
+        model.Session.query(model.User)
+        .filter(
+            model.User.plugin_extras[ENTRA_OID_NAMESPACE][ENTRA_OID_KEY].astext == oid
+        )
+        .first()
+    )
+
+
+def _set_entra_oid(user, oid):
+    """Stamp the Entra object id onto the user's plugin_extras (idempotent).
+
+    Reassigns a new dict so SQLAlchemy flags the column dirty.
+    """
+    extras = dict(user.plugin_extras or {})
+    ns = dict(extras.get(ENTRA_OID_NAMESPACE) or {})
+    if ns.get(ENTRA_OID_KEY) == oid:
+        return
+    ns[ENTRA_OID_KEY] = oid
+    extras[ENTRA_OID_NAMESPACE] = ns
+    user.plugin_extras = extras
+
+
 REQUIRED_CONF = (
     "authorization_endpoint",
     "token_endpoint",
@@ -269,18 +301,27 @@ class OAuth2Helper(object):
         # Github provides email in list format
         if self.profile_api_url.startswith("https://api.github.com"):
             email = [e["email"] for e in user_data if e["primary"] == True][0]
+            oid = None
         else:
             email = user_data[self.profile_api_mail_field]
+            # Microsoft Graph returns the immutable object id as "id". Prefer it
+            # over the mutable email as the account-matching key.
+            oid = user_data.get("id")
 
         user_name = email.rpartition("@")[0]
 
         # In CKAN can exists more than one user associated with the same email
         # Some providers, like Google and FIWARE only allows one account per email
         user = None
-        users = model.User.by_email(email)
+        # Match on the stable Entra object id first; fall back to email.
+        if oid:
+            user = _user_by_entra_oid(oid)
+        if not user:
+            users = model.User.by_email(email)
+            if users:
+                user = users
 
-        if users:
-            user = users
+        if user:
             user.state = "active"
 
         # If the user does not exist, we have to create it...
@@ -295,6 +336,12 @@ class OAuth2Helper(object):
                 else user_name + "%s" % random.randint(10, 20)
             )
             user.name = user.name.lower().replace(".", "_")
+
+        # Entra is the source of truth for the email: refresh it on every login
+        # so a change in the IdP propagates (matching is by oid, so this is safe
+        # even when the address changed).
+        if email:
+            user.email = email
 
         # Now we update his/her user_name with the one provided by the OAuth2 service
         # In the future, users will be obtained based on this field
@@ -315,6 +362,10 @@ class OAuth2Helper(object):
                 self.sysadmin_group_name
                 in user_data[self.profile_api_groupmembership_field]
             )
+
+        # Record the immutable Entra object id for stable matching / deactivation.
+        if oid:
+            _set_entra_oid(user, oid)
 
         return user
 
