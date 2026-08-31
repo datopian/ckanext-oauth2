@@ -18,11 +18,37 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with OAuth2 CKAN Extension.  If not, see <http://www.gnu.org/licenses/>.
 
+import io
+import os
 import re
 
 from setuptools import setup, find_packages
 
-from ckanext.oauth2 import __version__, __description__
+
+def _metadata():
+    """Read __version__/__description__ without importing the package.
+
+    setup.py must not import ckanext.oauth2: pip builds in an isolated
+    environment where the source is not yet on sys.path, so the import
+    fails with ModuleNotFoundError before setup() ever runs.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    init = os.path.join(here, "ckanext", "oauth2", "__init__.py")
+    with io.open(init, encoding="utf-8") as handle:
+        content = handle.read()
+
+    found = {}
+    for name in ("__version__", "__description__"):
+        match = re.search(
+            r"^%s\s*=\s*['\"]([^'\"]*)['\"]" % name, content, re.M
+        )
+        if not match:
+            raise RuntimeError("Cannot find %s in %s" % (name, init))
+        found[name] = match.group(1)
+    return found["__version__"], found["__description__"]
+
+
+__version__, __description__ = _metadata()
 
 
 PYPI_RST_FILTERS = (
@@ -71,25 +97,17 @@ setup(
     namespace_packages=['ckanext'],
     include_package_data=True,
     zip_safe=False,
-    setup_requires=[
-        'nose>=1.3.0'
-    ],
     install_requires=[
         'requests-oauthlib==0.8.0',
         'pyjwt==1.7.1',
     ],
     tests_require=[
         'parameterized',
-        'selenium==3.5.0'
     ],
-    test_suite='nosetests',
     entry_points={
         'ckan.plugins': [
             'oauth2 = ckanext.oauth2.plugin:OAuth2Plugin',
         ],
-        'nose.plugins': [
-            'pylons = pylons.test:PylonsPlugin'
-        ]
     },
     classifiers=[
         "Development Status :: 5 - Production/Stable",
