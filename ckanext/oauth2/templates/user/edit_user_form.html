@@ -2,6 +2,7 @@
 {% set show_email_notifications = h.asbool(config.get("ckan.activity_streams_email_notifications", false)) %}
  
 <form id="user-edit-form" class="dataset-form" method="post" action="{{ action }}">
+  {{ h.csrf_input() }}
   {{ form.errors(error_summary) }}
 
   <fieldset>
