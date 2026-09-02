@@ -24,6 +24,13 @@
   </fieldset>
 
   {% if  h.user_is_sso_user() %}
+    <fieldset>
+      <legend>{{ _('Password') }}</legend>
+      <p class="alert alert-info">
+        {{ _('You sign in with Microsoft. Your password is managed by your '
+             'organisation and cannot be set or reset here.') }}
+      </p>
+    </fieldset>
     {{ form.hidden('password1', data.password1) }}
     {{ form.hidden('password2', data.password2) }}
   {% else %}
