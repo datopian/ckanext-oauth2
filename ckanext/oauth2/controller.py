@@ -188,6 +188,25 @@ class UserProfileController(MethodView):
             # Runs in a worker thread with no request session to flash into.
             log.error("Error sending email: %s", e)
 
+    @staticmethod
+    def _as_guest_flag(value):
+        """Coerce the guest_user form value to a bool.
+
+        tk.asbool raises on anything outside its true/false vocabulary, and
+        an absent or empty field is normal here: clean_dict strips empty
+        values, and older forms posted "". Treat those as "not a guest"
+        rather than 500-ing.
+        """
+        if value is None or value == "":
+            return False
+        if isinstance(value, bool):
+            return value
+        try:
+            return tk.asbool(value)
+        except ValueError:
+            log.warning("Unexpected guest_user value %r; treating as False", value)
+            return False
+
     def _redirect_if_not_editable(self, user):
         """Stop a user editing their profile once it is out of their hands.
 
@@ -288,7 +307,7 @@ class UserProfileController(MethodView):
         # Set on both paths: a first-time user has no token row yet, and
         # previously only the update branch persisted these fields.
         user_token.institution = data_dict.get("institution", "")
-        user_token.guest = tk.asbool(data_dict.get("guest_user", False))
+        user_token.guest = self._as_guest_flag(data_dict.get("guest_user"))
 
         model.Session.add(user_token)
         model.Session.commit()
@@ -361,7 +380,7 @@ class UserProfileController(MethodView):
 
             user_token_dict = {
                 "name": user.name,
-                "guest_user": tk.asbool(data_dict.get("guest_user", False)),
+                "guest_user": self._as_guest_flag(data_dict.get("guest_user")),
                 "institution": data_dict.get("institution", ""),
             }
 

@@ -121,7 +121,7 @@ this.ckan.module('guest-user-checkbox', function (jQuery) {
         var guest = isGuest();
 
         jQuery('.institution-choice__field').toggle(!guest);
-        jQuery('#guest_user').val(guest ? 'True' : '');
+        jQuery('#guest_user').val(guest ? 'true' : 'false');
 
         // Never set `required` here: select2 hides the real input, and the
         // browser skips constraint validation on hidden fields - the submit
