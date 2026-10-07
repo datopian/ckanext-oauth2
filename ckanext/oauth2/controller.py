@@ -140,26 +140,69 @@ class UserProfileController(MethodView):
         account_user = user.get("fullname", user.get("name"))
         site_url = tk.config.get("ckan.site_url")
         institution = ""  # Not implemented yet
-        archive_email = tk.h.archive_manager_email()
 
         subject = tk._("NIRD ARCHIVE: user access request")
 
         try:
-            admins = model.Session.query(model.User).filter_by(sysadmin=True).all()
-            for admin in admins:
-                if admin.email:
-                    body = f"""
-                        <p>Dear {admin.fullname or admin.email},</p>
-                        <p>The user: {account_user} from {institution} has submitted a request to use the archive.<br>
-                        You can contact this user at <a href="mailto:{archive_email}">{archive_email}</a>for more details if required.<br>
-                        To approve or decline this request please go to <a href="{site_url}/admin/account_review">{site_url}/admin/account_review</a>.</p>
-                        <p>{archive_email}</p>
-                    """
+            # archive_manager_email() comes from ckanext-sigma2. Keep it
+            # inside the try: if that plugin is not loaded the lookup raises,
+            # and outside the try it killed the whole notification before the
+            # first recipient was even considered.
+            try:
+                archive_email = tk.h.archive_manager_email()
+            except Exception:
+                log.warning(
+                    "archive_manager_email helper unavailable; "
+                    "sending admin notification without a contact address"
+                )
+                archive_email = ""
+
+            admins = (
+                model.Session.query(model.User)
+                .filter(
+                    model.User.sysadmin.is_(True),
+                    model.User.state == "active",
+                )
+                .all()
+            )
+
+            recipients = [admin for admin in admins if admin.email]
+            if not recipients:
+                log.error(
+                    "No active sysadmin with an email address found: the "
+                    "access request from %s was not notified to anyone "
+                    "(%d active sysadmin(s) checked)",
+                    account_user,
+                    len(admins),
+                )
+                return
+
+            for admin in recipients:
+                body = f"""
+                    <p>Dear {admin.fullname or admin.email},</p>
+                    <p>The user: {account_user} from {institution} has submitted a request to use the archive.<br>
+                    You can contact this user at <a href="mailto:{archive_email}">{archive_email}</a>for more details if required.<br>
+                    To approve or decline this request please go to <a href="{site_url}/admin/account_review">{site_url}/admin/account_review</a>.</p>
+                    <p>{archive_email}</p>
+                """
+                try:
                     mail_user(
                         recipient=admin,
                         subject=subject,
                         body="",
                         body_html=body,
+                    )
+                except Exception as e:
+                    log.error(
+                        "Failed to send access request notification to %s: %s",
+                        admin.name,
+                        e,
+                    )
+                else:
+                    log.info(
+                        "Sent access request notification for %s to %s",
+                        account_user,
+                        admin.name,
                     )
         except Exception as e:
             # No flash here: this runs in a worker thread with no request
@@ -431,12 +474,23 @@ class UserProfileController(MethodView):
         )
 
     def _notify_submission(self, user, user_dict):
-        # The mail helpers read tk.config and render templates, so the worker
-        # needs its own app context - the request one is gone by then.
+        # These helpers need a *request* context, not just an app context:
+        # tk.render() goes through ckan.lib.base._allow_caching(), which reads
+        # g, session and request.environ, and tk._() resolves a locale from the
+        # request. An app context alone raised "Working outside of request
+        # context" and both emails were lost.
+        #
+        # The real request is gone by the time the worker runs (and is not
+        # shareable across threads anyway), so build a synthetic one. base_url
+        # keeps url_for() generating absolute links that match the site URL.
         app = flask.current_app._get_current_object()
 
+        site_url = tk.config.get("ckan.site_url") or ""
+        parsed = urlparse(site_url)
+        ctx_kwargs = {"base_url": site_url} if parsed.netloc else {}
+
         def _send():
-            with app.app_context():
+            with app.test_request_context("/", **ctx_kwargs):
                 try:
                     self._mail_user(user)
                 except Exception as e:

@@ -62,6 +62,7 @@ ACCOUNT_STATE_GATES = {
 }
 
 
+@toolkit.blanket.config_declarations
 class OAuth2Plugin(plugins.SingletonPlugin):
     plugins.implements(plugins.ITemplateHelpers)
     plugins.implements(plugins.IAuthenticator, inherit=True)
@@ -98,7 +99,8 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         return controller.get_blueprint()
 
     def identify(self):
-        log.debug("Identifying the user")
+        # Runs on every request - static assets included - so anything logged
+        # here unconditionally is emitted hundreds of times per page view.
 
         def _refresh_and_save_token(user_name):
             user = db.UserToken.by_user_name(user_name=user_name)
@@ -133,7 +135,9 @@ class OAuth2Plugin(plugins.SingletonPlugin):
         # If the authentication via API fails, we can still log in the user using session.
         if user_name is None and "repoze.who.identity" in environ:
             user_name = environ["repoze.who.identity"]["repoze.who.userid"]
-            log.info("User %s logged using session" % user_name)
+            # Also deliberately silent: this ran on every request for a
+            # signed-in user, assets included. The login itself is logged
+            # once by the OAuth2 callback, which is the event worth having.
 
         # If we have been able to log in the user (via API or Session)
         if user_name:
@@ -148,7 +152,10 @@ class OAuth2Plugin(plugins.SingletonPlugin):
             toolkit.c.usertoken_refresh = partial(_refresh_and_save_token, user_name)
         else:
             g.user = None
-            log.warn("The user is currently not logged in.")
+            # Deliberately silent. Anonymous browsing is the normal case, not
+            # an event: this hook runs on every request, the matching success
+            # branch above logs nothing either, and CKAN core logs nothing
+            # here. It was previously a warning, which flooded the log.
 
     # ICongfigurer
     def update_config(self, config):

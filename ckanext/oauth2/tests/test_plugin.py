@@ -203,3 +203,4 @@ class PluginTest(unittest.TestCase):
             plugin.toolkit.c.usertoken_refresh()
             self._plugin.oauth2helper.refresh_token.assert_called_once_with(expected_user)
             self.assertEquals(newtoken, plugin.toolkit.c.usertoken)
+

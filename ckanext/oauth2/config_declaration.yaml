@@ -1,0 +1,50 @@
+version: 1
+groups:
+  - annotation: ckanext-oauth2 provider configuration
+    options:
+      - key: ckan.oauth2.config_file
+        description: |
+          Path to a JSON or YAML file describing the OAuth2 providers.
+          Mutually exclusive with ckan.oauth2.config_json, which takes
+          precedence when both are set. One of the two is required.
+      - key: ckan.oauth2.config_json
+        description: |
+          The provider configuration as an inline JSON string, for
+          deployments that pass config via environment variables rather
+          than a file. Takes precedence over ckan.oauth2.config_file.
+
+  - annotation: ckanext-oauth2 behaviour
+    options:
+      - key: ckan.oauth2.authorization_header
+        default: Authorization
+        description: |
+          Request header carrying the OAuth2 access token. Lowercased
+          before use. Overridden by CKAN_OAUTH2_AUTHORIZATION_HEADER.
+      - key: ckan.oauth2.rememberer_name
+        default: auth_tkt
+        description: |
+          Name of the repoze.who plugin used to remember the session.
+          Overridden by CKAN_OAUTH2_REMEMBER_NAME.
+      - key: ckan.oauth2.jwt.enable
+        description: |
+          Enable JWT handling of the access token. Truthy values are
+          "true", "1" and "on". Overridden by CKAN_OAUTH2_JWT_ENABLE.
+      - key: ckan.oauth2.legacy_idm
+        description: |
+          Enable compatibility with the legacy FIWARE IdM. Truthy values
+          are "true", "1" and "on". Overridden by CKAN_OAUTH2_LEGACY_IDM.
+
+  - annotation: ckanext-oauth2 account management URLs
+    options:
+      - key: ckan.oauth2.register_url
+        description: |
+          External URL where users register an account. Overridden by
+          CKAN_OAUTH2_REGISTER_URL.
+      - key: ckan.oauth2.reset_url
+        description: |
+          External URL where users reset their password. Overridden by
+          CKAN_OAUTH2_RESET_URL.
+      - key: ckan.oauth2.edit_url
+        description: |
+          External URL where users edit their profile. Overridden by
+          CKAN_OAUTH2_EDIT_URL.
