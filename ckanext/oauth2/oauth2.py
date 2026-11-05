@@ -444,10 +444,10 @@ class OAuth2Helper(object):
                 else:
                     raise
             except:
-                log.error("Error refreshing token for user %s" % user_name)
+                log.error("%s: OAuth2 token refresh failed", user_name)
                 raise
             self.update_token(user_name, token)
-            log.info("Token for user %s has been updated properly" % user_name)
+            log.info("%s: OAuth2 token refreshed", user_name)
             return token
         else:
             log.warn("User %s has no refresh token" % user_name)
